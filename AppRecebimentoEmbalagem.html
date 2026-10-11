@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimentação de Embalagem — Recebimento c/ Etiqueta (Zebra)</title>
+<style>
+  :root{ --azul:#15233F; --azul2:#1F3A6E; --laranja:#F26B21; --verde:#1a7a44; --vermelho:#c0392b; --amarelo:#e67e22; --cinza:#eef1f5; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:18px;background:var(--cinza);color:#222;max-width:1100px;margin:0 auto;}
+  h1{font-size:21px;color:var(--azul);margin:0 0 2px;}
+  .sub{color:#666;font-size:13px;margin-bottom:16px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+  @media(max-width:860px){ .grid{grid-template-columns:1fr;} }
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  .cartao h2{font-size:14px;color:var(--azul2);margin:0 0 12px;text-transform:uppercase;letter-spacing:.5px;}
+  label{display:block;font-size:11.5px;font-weight:bold;color:#555;margin:10px 0 4px;}
+  input,select{width:100%;padding:11px;font-size:15px;border:1px solid #c7ccd4;border-radius:7px;}
+  select#movimento{border:2px solid var(--azul2);font-weight:bold;color:var(--azul);}
+  .lin{display:flex;gap:12px;flex-wrap:wrap}
+  .lin>div{flex:1;min-width:120px}
+  button{padding:13px 16px;font-size:15px;font-weight:bold;border:none;border-radius:8px;cursor:pointer;}
+  .b-acao{width:100%;font-size:17px;padding:16px;margin-top:14px;color:#fff;background:var(--laranja);}
+  .b-azul{background:var(--azul2);color:#fff;}
+  .b-cinza{background:#e4e8ef;color:#333;}
+  button:disabled{opacity:.5;cursor:default;}
+  .status{padding:11px 13px;border-radius:8px;margin-top:12px;font-size:14px;line-height:1.4;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;} .warn{background:#fef3e0;color:#8a5a12;}
+  .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+  .prev{background:#fff;border:1px solid #e3e7ee;border-radius:8px;padding:12px;}
+  .etq{width:100%;aspect-ratio:202/105;max-width:440px;margin:0 auto;border:1px solid #bbb;border-radius:6px;position:relative;overflow:hidden;background:#fff;}
+  .hist{font-size:12.5px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  details{margin-top:4px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul2)}
+  textarea{width:100%;height:150px;font-family:monospace;font-size:11px;border:1px solid #c7ccd4;border-radius:7px;padding:8px}
+  .mini{font-size:11px;color:#888;margin-top:3px}
+  .saldo{font-size:12px;font-weight:bold;color:var(--verde);margin-top:5px;min-height:15px}
+  .hide{display:none}
+</style>
+</head>
+<body>
+  <h1>Movimentação de Embalagem</h1>
+  <div class="sub">Recebimento com etiqueta QR (entrada alimenta o estoque) · Transferência · Perda — DUNAX.</div>
+
+  <div class="grid">
+    <!-- ======== FORMULÁRIO ======== -->
+    <div>
+      <div class="cartao">
+        <h2>1. Tipo de movimentação</h2>
+        <select id="movimento" onchange="trocarMov()">
+          <option value="Entrada">📥 ENTRADA (Compra / Reposição) — gera etiqueta e alimenta o estoque</option>
+          <option value="Transferência - Filial">🚚 TRANSFERÊNCIA (Envio para Filial)</option>
+          <option value="Perda - Processo">⚠️ PERDA DE PROCESSO (Quebra no Envase)</option>
+          <option value="Perda - Qualidade">🛑 PERDA DE QUALIDADE (Defeito de Fábrica)</option>
+        </select>
+      </div>
+
+      <div class="cartao">
+        <h2>2. Item de embalagem</h2>
+        <label>Categoria</label>
+        <select id="categoria" onchange="filtrarItens()"><option value="">-- Todas --</option></select>
+        <label>Buscar / selecionar item</label>
+        <input id="busca" placeholder="🔍 Digite para filtrar…" oninput="filtrarItens()" autocomplete="off" style="margin-bottom:8px">
+        <select id="item" onchange="aoEscolherItem()"><option value="">-- Selecione a categoria --</option></select>
+        <div class="saldo" id="saldoInfo"></div>
+      </div>
+
+      <!-- ======== ENTRADA ======== -->
+      <div class="cartao" id="secEntrada">
+        <h2>3. Dados do recebimento</h2>
+        <div class="lin">
+          <div><label>Material (texto grande da etiqueta)</label><input id="material" placeholder="TAMPA 20L" oninput="desenhar()"></div>
+          <div style="flex:0 0 120px"><label>Quantidade</label><input id="qtd" type="number" min="1" value="1" oninput="desenhar()"></div>
+        </div>
+        <div class="lin">
+          <div><label>Fornecedor</label><input id="forn" placeholder="SAPELBA" oninput="desenhar()"></div>
+          <div style="flex:0 0 140px"><label>Nº Lote interno</label><input id="lint" placeholder="auto" oninput="desenhar()"></div>
+        </div>
+        <div class="lin">
+          <div><label>Nota fiscal</label><input id="nf" oninput="desenhar()"></div>
+          <div><label>Data NF</label><input id="datanf" type="date" oninput="desenhar()"></div>
+        </div>
+        <div class="lin">
+          <div><label>Lote do fornecedor</label><input id="loteforn" oninput="desenhar()"></div>
+          <div><label>Data recebimento</label><input id="datarec" type="date" oninput="desenhar()"></div>
+        </div>
+        <div class="lin">
+          <div><label>Responsável</label><input id="resp" placeholder="DEBORA" oninput="desenhar()"></div>
+          <div><label>Situação</label><select id="sit" onchange="desenhar()"><option>APROVADO</option><option>REPROVADO</option><option>COM CONDICIONANTE</option></select></div>
+          <div style="flex:0 0 120px"><label>RNC Nº</label><input id="rnc" oninput="desenhar()"></div>
+        </div>
+      </div>
+
+      <!-- ======== SAÍDA (Transferência/Perda) ======== -->
+      <div class="cartao hide" id="secSaida">
+        <h2>3. Dados da saída</h2>
+        <div class="lin">
+          <div><label id="lblDestino">Destino / Motivo</label><input id="destino" placeholder="Ex: Filial PE / quebra na linha"></div>
+          <div style="flex:0 0 120px"><label>Quantidade</label><input id="qtdSaida" type="number" min="1" value="1"></div>
+        </div>
+        <div class="lin">
+          <div><label>Lote (opcional)</label><input id="loteSaida"></div>
+          <div><label>Nota fiscal (opcional)</label><input id="nfSaida"></div>
+          <div><label>Responsável</label><input id="respSaida"></div>
+        </div>
+      </div>
+
+      <button class="b-acao" id="btnAcao" onclick="confirmar()">🖨️ GERAR ETIQUETA E DAR ENTRADA</button>
+      <div id="status" class="status info">Selecione o item e confirme.</div>
+
+      <div class="cartao" style="margin-top:16px">
+        <h2>Últimas ações</h2>
+        <div id="hist"><div style="color:#aaa">(nenhuma ainda)</div></div>
+      </div>
+    </div>
+
+    <!-- ======== PRÉVIA + CONFIG ======== -->
+    <div>
+      <div class="cartao" id="boxPrev">
+        <h2>Prévia da etiqueta (105 × 202 mm)</h2>
+        <div class="prev"><div class="etq" id="etq"></div></div>
+        <div class="mini" style="text-align:center">QR = entrada no estoque por bipe</div>
+      </div>
+
+      <div class="cartao" id="boxImp">
+        <h2>Impressora & conexões</h2>
+        <div style="margin-bottom:8px">Browser Print: <span id="pBP" class="pill n">—</span>
+          &nbsp; API Envase: <span id="pApi" class="pill n">—</span></div>
+        <div class="lin">
+          <div><button class="b-azul" style="width:100%" onclick="detectar()">🔌 Detectar impressora</button></div>
+          <div><button class="b-cinza" style="width:100%" onclick="imprimirTeste()">Imprimir teste</button></div>
+        </div>
+        <div id="impInfo" class="mini">Abra esta página no PC onde o Zebra Browser Print está instalado.</div>
+
+        <details style="margin-top:12px">
+          <summary>Configuração</summary>
+          <label>URL da API do Envase (/exec)</label>
+          <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+          <label>Host do Browser Print</label>
+          <input id="bpHost" value="http://127.0.0.1:9100">
+          <button class="b-azul" style="width:100%;margin-top:10px" onclick="salvarConfig()">Salvar</button>
+        </details>
+
+        <details style="margin-top:8px">
+          <summary>Ver ZPL gerado</summary>
+          <textarea id="zplOut" readonly></textarea>
+          <button class="b-cinza" style="width:100%;margin-top:8px" onclick="copiarZPL()">Copiar ZPL</button>
+        </details>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===================== estado / config ===================== */
+var historico=[], printer=null, ITENS=[];
+function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+function val(id){ var el=document.getElementById(id); return el?(el.value||'').trim():''; }
+function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
+function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
+function apiUrl(){ return (ls('emb_api')||'').trim().split('?')[0].split('#')[0]; }
+function bpHost(){ return (ls('emb_bp')||'http://127.0.0.1:9100').replace(/\/+$/,''); }
+function ehEntrada(){ return val('movimento')==='Entrada'; }
+
+window.onload=function(){
+  document.getElementById('apiUrl').value=apiUrl();
+  document.getElementById('bpHost').value=bpHost();
+  document.getElementById('datarec').value=new Date().toISOString().slice(0,10);
+  pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
+  if(apiUrl()){ carregarItens(); sugerirLote(); }
+  detectar(true); trocarMov(); desenhar();
+};
+function salvarConfig(){
+  ls('emb_api', document.getElementById('apiUrl').value.trim());
+  ls('emb_bp', document.getElementById('bpHost').value.trim());
+  pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
+  if(apiUrl()){ carregarItens(); sugerirLote(); }
+  setStatus('Configuração salva.','ok');
+}
+
+/* ===================== API ===================== */
+async function getAPI(params){
+  var r=await fetch(apiUrl()+params,{method:'GET'});
+  var t=await r.text();
+  try{ return JSON.parse(t); }
+  catch(e){ var m=t.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
+            return {ok:false, erro:'A API não retornou JSON (HTTP '+r.status+'). '+(m||'(vazia)')}; }
+}
+async function carregarItens(){
+  try{
+    var d=await getAPI('?acaoemb=itens');
+    if(d && d.ok && d.itens){ ITENS=d.itens;
+      var cats=[]; ITENS.forEach(function(i){ if(i.tipo && cats.indexOf(i.tipo)===-1) cats.push(i.tipo); });
+      cats.sort();
+      var sc=document.getElementById('categoria');
+      sc.innerHTML='<option value="">-- Todas --</option>'+cats.map(function(c){return '<option>'+c+'</option>';}).join('');
+      filtrarItens();
+    }
+  }catch(e){}
+}
+async function sugerirLote(){
+  try{ var d=await getAPI('?acaoemb=proxlote'); if(d&&d.ok&&d.lote && !val('lint')){ document.getElementById('lint').value=d.lote; desenhar(); } }catch(e){}
+}
+function filtrarItens(){
+  var cat=val('categoria'), busca=val('busca').toUpperCase();
+  var si=document.getElementById('item');
+  var lista=ITENS.filter(function(i){
+    var okCat = !cat || i.tipo===cat;
+    var txt=((i.cod||'')+' '+(i.desc||'')).toUpperCase();
+    return okCat && (busca==='' || txt.indexOf(busca)>-1);
+  });
+  si.innerHTML='<option value="">-- Selecione o item ('+lista.length+') --</option>'
+    + lista.map(function(i){ return '<option value="'+i.cod+'">['+i.cod+'] '+i.desc+' · saldo '+i.saldo+'</option>'; }).join('');
+  document.getElementById('saldoInfo').textContent='';
+}
+function itemAtual(){ var c=val('item'); for(var i=0;i<ITENS.length;i++) if(ITENS[i].cod===c) return ITENS[i]; return null; }
+function aoEscolherItem(){
+  var it=itemAtual();
+  if(!it){ document.getElementById('saldoInfo').textContent=''; return; }
+  document.getElementById('saldoInfo').textContent='Saldo '+it.saldo+' · reserva '+it.reserva+' · disponível '+it.disponivel+(it.status==='CHEIO'?'  ⚠️ estoque CHEIO':'');
+  if(ehEntrada() && !val('material')) document.getElementById('material').value=(it.desc||'').toUpperCase();
+  desenhar();
+}
+
+/* ===================== troca de movimento ===================== */
+function trocarMov(){
+  var ent=ehEntrada();
+  document.getElementById('secEntrada').classList.toggle('hide', !ent);
+  document.getElementById('secSaida').classList.toggle('hide', ent);
+  document.getElementById('boxPrev').classList.toggle('hide', !ent);
+  document.getElementById('boxImp').classList.toggle('hide', !ent);
+  var b=document.getElementById('btnAcao'), mov=val('movimento');
+  if(ent){ b.textContent='🖨️ GERAR ETIQUETA E DAR ENTRADA'; b.style.background='var(--laranja)'; }
+  else if(/transfer/i.test(mov)){ b.textContent='🚚 REGISTRAR TRANSFERÊNCIA'; b.style.background='var(--amarelo)';
+     document.getElementById('lblDestino').textContent='Destino (filial)'; }
+  else { b.textContent='🛑 REGISTRAR PERDA'; b.style.background='var(--vermelho)';
+     document.getElementById('lblDestino').textContent='Motivo / local'; }
+  setStatus(ent?'Preencha e gere a etiqueta — a entrada alimenta o estoque.':'Preencha a saída e confirme.', 'info');
+}
+
+/* ===================== Browser Print ===================== */
+async function detectar(silent){
+  try{
+    var r=await fetch(bpHost()+'/default?type=printer',{method:'GET'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    printer=await r.json(); pill('pBP','conectada','g');
+    document.getElementById('impInfo').textContent='Impressora: '+(printer.name||printer.uid||'padrão');
+    if(!silent) setStatus('Impressora detectada.','ok');
+  }catch(e){ printer=null; pill('pBP','sem conexão','r');
+    document.getElementById('impInfo').textContent='Browser Print não respondeu em '+bpHost()+'. Abra a página no PC com o Zebra Browser Print aberto (e, em https, abra como arquivo local ou http).';
+    if(!silent) setStatus('Não achei o Browser Print em '+bpHost()+'.','erro'); }
+}
+async function enviarZPL(zpl){
+  if(!printer) await detectar(true);
+  if(!printer) throw new Error('Impressora não conectada.');
+  var r=await fetch(bpHost()+'/write',{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({device:printer,data:zpl})});
+  if(!r.ok) throw new Error('Browser Print HTTP '+r.status);
+}
+async function imprimirTeste(){
+  try{ await enviarZPL('^XA^CI28^FO60,60^A0N,60,60^FDTESTE DUNAX^FS^FO60,160^BQN,2,6^FDMA,TESTE^FS^XZ'); setStatus('Teste enviado.','ok'); }
+  catch(e){ setStatus('Falha no teste: '+e.message,'erro'); }
+}
+
+/* ===================== dados / token / ZPL ===================== */
+function limpa(s){ return String(s||'').replace(/[|,]/g,' ').trim(); }
+function brDate(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0].slice(2)):iso; }
+function coletar(){
+  return { cod:val('item'), material:(val('material')||'').toUpperCase(), qtd:parseInt(val('qtd'),10)||0,
+    forn:(val('forn')||'').toUpperCase(), lint:val('lint'), nf:val('nf'), datanf:brDate(val('datanf')),
+    loteforn:val('loteforn'), datarec:brDate(val('datarec')), resp:(val('resp')||'').toUpperCase(),
+    sit:val('sit'), rnc:val('rnc') };
+}
+function token(d){ return 'EMB|'+limpa(d.cod)+'|'+(d.qtd||0)+'|'+limpa(d.loteforn)+'|'+limpa(d.lint); }
+function esc(s){ return String(s==null?'':s); }
+function buildZPL(d){
+  var tk=token(d), nome=esc(d.material)||' ';
+  var w=Math.max(55,Math.min(110,Math.floor(1150/Math.max(1,nome.length)))), h=Math.round(w*1.35);
+  var z='';
+  z+='CT~~CD,~CC^~CT~\n^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR4,4~SD15^JUS^LRN^CI28^XZ\n';
+  z+='^XA\n^MMT\n^PW831\n^LL1614\n^LS0\n';
+  z+='^FO10,11^GB809,1588,8^FS\n^FO9,11^GB280,1588,8^FS\n';
+  z+='^FO30,40^BQN,2,6^FDMA,'+tk+'^FS\n^FO9,315^GB280,0,6^FS\n';
+  z+='^FT71,1576^A0B,42,19^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
+  z+='^FT250,1560^A0B,'+h+','+w+'^FD'+nome+'^FS\n';
+  z+='^FO288,445^GB531,0,8^FS\n^FO447,15^GB0,430,6^FS\n';
+  z+='^FT300,438^A0B,42,28^FDQTD^FS\n^FT372,438^A0B,100,70^FD'+esc(d.qtd)+'^FS\n';
+  z+='^FT461,420^A0B,60,34^FDDATA RECEBIMENTO^FS\n^FT675,418^A0B,120,95^FD'+esc(d.datarec)+'^FS\n';
+  z+='^FO281,459^GB0,1133,8^FS\n^FO374,449^GB0,1150,8^FS\n^FO493,449^GB0,1150,8^FS\n^FO591,449^GB0,1143,8^FS\n^FO811,460^GB0,1133,8^FS\n';
+  z+='^FO377,873^GB332,0,8^FS\n^FO374,702^GB337,0,8^FS\n^FO281,1350^GB532,0,8^FS\n';
+  z+='^FT349,1573^A0B,44,33^FDFORNECEDOR^FS\n^FT432,860^A0B,44,33^FDLOTE^FS\n^FT486,860^A0B,44,33^FDINTERNO^FS\n';
+  z+='^FT432,1573^A0B,44,33^FB188,1,0,R^FDLOTE ^FS\n^FT486,1573^A0B,44,33^FB188,1,0,R^FDFORNECEDOR^FS\n';
+  z+='^FT570,860^A0B,44,33^FDDATA NF^FS\n^FT570,1567^A0B,44,33^FDNOTA FISCAL^FS\n';
+  z+='^FT670,1555^A0B,53,40^FDSITUAÇÃO^FS\n^FT670,864^A0B,53,40^FDRNC Nº^FS\n^FT770,1585^A0B,44,33^FDRESPONSÁVEL^FS\n';
+  z+='^FT471,643^A0B,48,38^FD'+esc(d.lint)+'^FS\n^FT355,1324^A0B,48,38^FD'+esc(d.forn)+'^FS\n';
+  z+='^FT576,1324^A0B,48,38^FD'+esc(d.nf)+'^FS\n^FT471,1324^A0B,48,38^FD'+esc(d.loteforn)+'^FS\n';
+  z+='^FT776,1324^A0B,48,38^FD'+esc(d.resp)+'^FS\n^FT666,1334^A0B,48,38^FD'+esc(d.sit)+'^FS\n';
+  z+='^FT666,684^A0B,48,38^FD'+esc(d.rnc)+'^FS\n^FT570,669^A0B,48,38^FD'+esc(d.datanf)+'^FS\n';
+  z+='^PQ1,0,1,Y^XZ\n';
+  return z;
+}
+
+/* ===================== prévia (paisagem) ===================== */
+function svgEsc(s){ return esc(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function desenhar(){
+  if(!ehEntrada()) return;
+  var d=coletar();
+  var zo=document.getElementById('zplOut'); if(zo) zo.value=buildZPL(d);
+  var mat=svgEsc(d.material)||'—';
+  var fsMat=Math.max(9,Math.min(18,Math.floor(155/Math.max(1,mat.length))));
+  function T(x,y,t,s,o){ o=o||{}; return '<text x="'+x+'" y="'+y+'" font-size="'+s+'" fill="'+(o.fill||'#111')+'"'
+    +(o.b?' font-weight="bold"':'')+(o.anchor?' text-anchor="'+o.anchor+'"':'')
+    +(o.rot?' transform="rotate('+o.rot+' '+x+' '+y+')"':'')+'>'+svgEsc(t)+'</text>'; }
+  function cell(x,y,w,h,l,v,vs){ var s='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#111" stroke-width=".5"/>';
+    if(l) s+=T(x+2,y+5,l,3,{fill:'#555'}); if(v!=='' && v!=null) s+=T(x+w/2,y+h-3.5,v,vs||6,{b:true,anchor:'middle'}); return s; }
+  var g='<rect x="1" y="1" width="200" height="103" fill="#fff" stroke="#111" stroke-width="1"/>';
+  g+='<line x1="70" y1="1" x2="70" y2="104" stroke="#111" stroke-width="1"/>';
+  g+='<rect x="6" y="6" width="25" height="25" fill="#111"/><rect x="9" y="9" width="19" height="19" fill="#fff"/><rect x="13" y="13" width="11" height="11" fill="#111"/>';
+  g+='<line x1="1" y1="35" x2="70" y2="35" stroke="#111" stroke-width=".5"/>';
+  g+=T(5,101,'IDENTIFICAÇÃO DE MATERIAL',3,{fill:'#555',rot:-90});
+  g+=T(42,68,mat,fsMat,{b:true,anchor:'middle'});
+  g+=cell(70,1,34,23,'QTD',svgEsc(d.qtd),12);
+  g+=cell(104,1,97,23,'DATA RECEBIMENTO',svgEsc(d.datarec),13);
+  g+=cell(70,24,50,27,'LOTE INTERNO',svgEsc(d.lint),6);
+  g+=cell(70,51,50,27,'DATA NF',svgEsc(d.datanf),6);
+  g+=cell(70,78,50,26,'RNC Nº',svgEsc(d.rnc),6);
+  var ry=24,rh=16;
+  g+=cell(120,ry,81,rh,'FORNECEDOR',svgEsc(d.forn),6); ry+=rh;
+  g+=cell(120,ry,81,rh,'LOTE FORNECEDOR',svgEsc(d.loteforn),6); ry+=rh;
+  g+=cell(120,ry,81,rh,'NOTA FISCAL',svgEsc(d.nf),6); ry+=rh;
+  g+=cell(120,ry,81,rh,'SITUAÇÃO',svgEsc(d.sit),6); ry+=rh;
+  g+=cell(120,ry,81,16,'RESPONSÁVEL',svgEsc(d.resp),6);
+  document.getElementById('etq').innerHTML='<svg viewBox="0 0 202 105" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+}
+
+/* ===================== confirmar ===================== */
+async function confirmar(){
+  if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+  var it=itemAtual();
+  if(!it){ setStatus('Selecione o item de embalagem.','erro'); return; }
+  if(ehEntrada()) return entradaComEtiqueta(it);
+  return registrarSaida(it);
+}
+
+async function entradaComEtiqueta(it){
+  var d=coletar();
+  if(!d.material){ setStatus('Informe o material (texto grande).','erro'); return; }
+  if(!(d.qtd>0)){ setStatus('Informe a quantidade.','erro'); return; }
+  var zpl=buildZPL(d); var zo=document.getElementById('zplOut'); if(zo) zo.value=zpl;
+  setStatus('Registrando entrada…','info');
+  // 1) dá entrada no estoque + loga
+  var q='?acaoemb=receber&cod='+encodeURIComponent(d.cod)+'&qtd='+encodeURIComponent(d.qtd)
+    +'&loteforn='+encodeURIComponent(d.loteforn)+'&lint='+encodeURIComponent(d.lint)
+    +'&forn='+encodeURIComponent(d.forn)+'&nf='+encodeURIComponent(d.nf)+'&datanf='+encodeURIComponent(d.datanf)
+    +'&material='+encodeURIComponent(d.material)+'&sit='+encodeURIComponent(d.sit)+'&rnc='+encodeURIComponent(d.rnc)
+    +'&resp='+encodeURIComponent(d.resp)+'&token='+encodeURIComponent(token(d));
+  var r=await getAPI(q);
+  if(!(r && r.ok)){ setStatus('🚨 '+((r&&r.erro)||'falha ao dar entrada'),'erro'); return; }
+  // 2) imprime a etiqueta
+  var msgImp='';
+  try{ await enviarZPL(zpl); }catch(e){ msgImp=' (⚠️ não imprimiu: '+e.message+')'; }
+  setStatus('✔ '+(r.mensagem||'Entrada registrada')+msgImp,'ok');
+  historico.unshift({t:new Date(), txt:'ENTRADA +'+d.qtd+' '+(d.material), zpl:zpl, ok:true});
+  renderHist();
+  var n=parseInt(d.lint,10); if(!isNaN(n)) document.getElementById('lint').value=n+1; else sugerirLote();
+  await carregarItens(); desenhar();
+}
+
+async function registrarSaida(it){
+  var qtd=parseInt(val('qtdSaida'),10)||0, mov=val('movimento');
+  if(!(qtd>0)){ setStatus('Informe a quantidade.','erro'); return; }
+  setStatus('Registrando…','info');
+  var q='?acaoemb=mover&cod='+encodeURIComponent(it.cod)+'&qtd='+encodeURIComponent(qtd)+'&mov='+encodeURIComponent(mov)
+    +'&destino='+encodeURIComponent(val('destino'))+'&lote='+encodeURIComponent(val('loteSaida'))
+    +'&nf='+encodeURIComponent(val('nfSaida'))+'&resp='+encodeURIComponent(val('respSaida'));
+  var r=await getAPI(q);
+  if(!(r && r.ok)){ setStatus('🚨 '+((r&&r.erro)||'falha'),'erro'); return; }
+  setStatus('✔ '+(r.mensagem||'Registrado'),'ok');
+  historico.unshift({t:new Date(), txt:mov+' −'+qtd+' '+(it.desc), ok:true});
+  renderHist();
+  document.getElementById('qtdSaida').value='1';
+  await carregarItens();
+}
+
+function renderHist(){
+  var box=document.getElementById('hist');
+  if(!historico.length){ box.innerHTML='<div style="color:#aaa">(nenhuma ainda)</div>'; return; }
+  box.innerHTML='';
+  historico.slice(0,12).forEach(function(h,idx){
+    var hh=('0'+h.t.getHours()).slice(-2)+':'+('0'+h.t.getMinutes()).slice(-2);
+    var div=document.createElement('div'); div.className='hist';
+    div.innerHTML='<span>'+h.txt+' <span style="color:#999">('+hh+')</span></span>';
+    if(h.zpl){ var b=document.createElement('button'); b.className='b-cinza'; b.style.cssText='padding:6px 12px;font-size:12px'; b.textContent='Reimprimir';
+      b.onclick=function(){ reimprimir(idx); }; div.appendChild(b); }
+    box.appendChild(div);
+  });
+}
+async function reimprimir(i){ try{ await enviarZPL(historico[i].zpl); setStatus('Reimpresso.','ok'); }catch(e){ setStatus('Falha ao reimprimir: '+e.message,'erro'); } }
+function copiarZPL(){ var t=document.getElementById('zplOut'); t.select(); try{document.execCommand('copy'); setStatus('ZPL copiado.','ok');}catch(e){} }
+</script>
+</body>
+</html>
