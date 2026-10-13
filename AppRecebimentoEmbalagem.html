@@ -117,8 +117,21 @@
       <div id="status" class="status info">Selecione o item e confirme.</div>
 
       <div class="cartao" style="margin-top:16px">
-        <h2>Últimas ações</h2>
+        <h2>Últimas ações (sessão)</h2>
         <div id="hist"><div style="color:#aaa">(nenhuma ainda)</div></div>
+      </div>
+
+      <div class="cartao">
+        <h2>Reimprimir etiquetas (histórico)</h2>
+        <div class="lin">
+          <div><label>Buscar (item, lote interno, NF, fornecedor)</label>
+            <input id="rpBusca" placeholder="digite e Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarReimpressao();}"></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><button class="b-azul" onclick="buscarReimpressao()">🔍 Buscar</button></div>
+        </div>
+        <label>Ou bipe o QR da etiqueta impressa</label>
+        <input id="rpQR" placeholder="Aponte o leitor e bipe o QR…" onkeydown="if(event.key==='Enter'){event.preventDefault();reimprimirPorQR();}">
+        <div id="rpStatus" class="mini" style="margin-top:6px"></div>
+        <div id="rpLista"></div>
       </div>
     </div>
 
@@ -164,7 +177,7 @@
 
 <script>
 /* ===================== estado / config ===================== */
-var historico=[], printer=null, ITENS=[], PALLETCFG=[];
+var historico=[], printer=null, ITENS=[], PALLETCFG=[], RECS=[];
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
 function val(id){ var el=document.getElementById(id); return el?(el.value||'').trim():''; }
 function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
@@ -486,6 +499,64 @@ function renderHist(){
 }
 async function reimprimir(i){ try{ await enviarZPL(historico[i].zpl); setStatus('Reimpresso.','ok'); }catch(e){ setStatus('Falha ao reimprimir: '+e.message,'erro'); } }
 function copiarZPL(){ var t=document.getElementById('zplOut'); t.select(); try{document.execCommand('copy'); setStatus('ZPL copiado.','ok');}catch(e){} }
+
+/* ===================== REIMPRESSÃO (histórico persistente) ===================== */
+function recToD(r){
+  return { cod:r.cod, material:(r.material||r.desc||'').toUpperCase(), qtd:r.qtd,
+    forn:(r.forn||'').toUpperCase(), lint:r.lint, nf:r.nf, datanf:r.datanf, loteforn:r.loteforn,
+    datarec:(r.data||'').split(' ')[0], resp:(r.resp||'').toUpperCase(), sit:r.sit, rnc:r.rnc };
+}
+function rpSet(t){ document.getElementById('rpStatus').textContent=t||''; }
+async function buscarReimpressao(){
+  if(!apiUrl()){ rpSet('Configure a URL da API primeiro.'); return; }
+  rpSet('Buscando…');
+  try{
+    var d=await getAPI('?acaoemb=recebimentos&q='+encodeURIComponent(val('rpBusca'))+'&limit=50');
+    RECS=(d&&d.ok&&d.recs)?d.recs:[];
+    renderReimpList();
+    rpSet(RECS.length? (RECS.length+' recebimento(s) encontrado(s).') : 'Nada encontrado.');
+  }catch(e){ rpSet('Falha na busca: '+e.message); }
+}
+function renderReimpList(){
+  var box=document.getElementById('rpLista'); box.innerHTML='';
+  RECS.slice(0,50).forEach(function(r,i){
+    var div=document.createElement('div'); div.className='hist';
+    div.innerHTML='<span><b>'+(r.material||r.desc)+'</b> · '+r.qtd+' un · lote '+(r.lint||'—')
+      +' <span style="color:#999">('+(r.data||'').slice(0,10)+' · NF '+(r.nf||'-')+')</span></span>';
+    var b=document.createElement('button'); b.className='b-cinza'; b.style.cssText='padding:6px 12px;font-size:12px';
+    b.textContent='Reimprimir'; b.onclick=function(){ reimprimirRec(i); };
+    div.appendChild(b); box.appendChild(div);
+  });
+}
+async function reimprimirRec(i){
+  var r=RECS[i]; if(!r) return;
+  try{ await enviarZPL(buildZPL(recToD(r))); rpSet('✔ Reimpresso: '+(r.material||r.desc)+' (lote '+r.lint+').'); }
+  catch(e){ rpSet('Falha ao reimprimir: '+e.message); }
+}
+async function reimprimirPorQR(){
+  var cod=limpaCodigoQR(val('rpQR'));
+  document.getElementById('rpQR').value='';
+  if(!cod){ return; }
+  if(cod.indexOf('EMB|')!==0){ rpSet('QR não reconhecido: '+cod); return; }
+  var p=cod.split('|');                 // EMB|cod|qtd|loteforn|lint(-seq)
+  var codEmb=p[1]||'', tQtd=parseInt(p[2],10)||0, lint=p[4]||'';
+  var base=lint.split('-')[0], k=(lint.indexOf('-')>-1? lint.split('-')[1] : '');
+  rpSet('Procurando o recebimento do lote '+base+'…');
+  try{
+    var d=await getAPI('?acaoemb=recebimentos&q='+encodeURIComponent(base)+'&limit=50');
+    var recs=(d&&d.ok&&d.recs)?d.recs:[];
+    var r=null;
+    for(var j=0;j<recs.length;j++){ if(String(recs[j].lint)===String(base) && (!codEmb||String(recs[j].cod).toUpperCase()===codEmb.toUpperCase())){ r=recs[j]; break; } }
+    if(!r){ for(var m=0;m<recs.length;m++){ if(String(recs[m].lint)===String(base)){ r=recs[m]; break; } } }
+    if(!r){ rpSet('Não achei o recebimento do lote '+base+'.'); return; }
+    var dd=recToD(r);
+    if(k && tQtd>0 && r.qtd>tQtd){ var N=Math.ceil(r.qtd/tQtd); dd.qtd=tQtd; dd.lint=lint; dd.seq=k+'/'+N; }  // reimprime o pallet exato
+    else if(tQtd>0){ dd.qtd=tQtd; dd.lint=lint; }
+    await enviarZPL(buildZPL(dd));
+    rpSet('✔ Reimpresso: '+(r.material||r.desc)+' · lote '+lint+(dd.seq?(' · '+dd.seq):''));
+  }catch(e){ rpSet('Falha: '+e.message); }
+}
+function limpaCodigoQR(txt){ var c=String(txt||'').trim(); if(c.toUpperCase().indexOf('MA,')===0) c=c.substring(3).trim(); return c; }
 </script>
 </body>
 </html>
