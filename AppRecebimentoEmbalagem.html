@@ -29,7 +29,7 @@
   .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
   .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
   .prev{background:#fff;border:1px solid #e3e7ee;border-radius:8px;padding:12px;}
-  .etq{width:100%;aspect-ratio:202/105;max-width:440px;margin:0 auto;border:1px solid #bbb;border-radius:6px;position:relative;overflow:hidden;background:#fff;}
+  .etq{width:100%;aspect-ratio:831/1614;max-width:250px;margin:0 auto;border:1px solid #bbb;border-radius:6px;position:relative;overflow:hidden;background:#fff;}
   .hist{font-size:12.5px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
   details{margin-top:4px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul2)}
   textarea{width:100%;height:150px;font-family:monospace;font-size:11px;border:1px solid #c7ccd4;border-radius:7px;padding:8px}
@@ -70,7 +70,12 @@
         <h2>3. Dados do recebimento</h2>
         <div class="lin">
           <div><label>Material (texto grande da etiqueta)</label><input id="material" placeholder="TAMPA 20L" oninput="desenhar()"></div>
-          <div style="flex:0 0 120px"><label>Quantidade</label><input id="qtd" type="number" min="1" value="1" oninput="desenhar()"></div>
+          <div style="flex:0 0 120px"><label>Quantidade (total NF)</label><input id="qtd" type="number" min="1" value="1" oninput="calcEtiquetas();desenhar()"></div>
+        </div>
+        <div class="lin">
+          <div style="flex:0 0 160px"><label>Qtd por pallet/caixa</label><input id="porPallet" type="number" min="0" placeholder="auto (config)" oninput="calcEtiquetas()"></div>
+          <div style="flex:0 0 140px"><label>Nº de etiquetas</label><input id="numEtq" readonly value="1" style="background:#eef5fb;font-weight:bold"></div>
+          <div style="flex:1;align-self:flex-end"><div class="mini" id="desmInfo" style="padding-bottom:12px"></div></div>
         </div>
         <div class="lin">
           <div><label>Fornecedor</label><input id="forn" placeholder="SAPELBA" oninput="desenhar()"></div>
@@ -89,6 +94,9 @@
           <div><label>Situação</label><select id="sit" onchange="desenhar()"><option>APROVADO</option><option>REPROVADO</option><option>COM CONDICIONANTE</option></select></div>
           <div style="flex:0 0 120px"><label>RNC Nº</label><input id="rnc" oninput="desenhar()"></div>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-weight:bold;color:#333;cursor:pointer">
+          <input type="checkbox" id="imprimir" checked style="width:auto" onchange="trocarMov()"> Imprimir etiqueta agora
+        </label>
       </div>
 
       <!-- ======== SAÍDA (Transferência/Perda) ======== -->
@@ -138,6 +146,10 @@
           <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
           <label>Host do Browser Print</label>
           <input id="bpHost" value="http://127.0.0.1:9100">
+          <div class="lin">
+            <div><label>Escurecimento (0–30)</label><input id="zDark" type="number" min="0" max="30" placeholder="Auto (painel)"></div>
+            <div><label>Velocidade (2–6 ips)</label><input id="zSpeed" type="number" min="2" max="6" placeholder="Auto (painel)"></div>
+          </div>
           <button class="b-azul" style="width:100%;margin-top:10px" onclick="salvarConfig()">Salvar</button>
         </details>
 
@@ -152,29 +164,36 @@
 
 <script>
 /* ===================== estado / config ===================== */
-var historico=[], printer=null, ITENS=[];
+var historico=[], printer=null, ITENS=[], PALLETCFG=[];
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
 function val(id){ var el=document.getElementById(id); return el?(el.value||'').trim():''; }
 function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
 function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
 function apiUrl(){ return (ls('emb_api')||'').trim().split('?')[0].split('#')[0]; }
 function bpHost(){ return (ls('emb_bp')||'http://127.0.0.1:9100').replace(/\/+$/,''); }
+function zebraDark(){ var v=ls('emb_dark'); if(v===null||String(v).trim()==='') return ''; var n=parseInt(v,10); return isNaN(n)?'':Math.max(0,Math.min(30,n)); }
+function zebraSpeed(){ var v=ls('emb_speed'); if(v===null||String(v).trim()==='') return ''; var n=parseInt(v,10); return isNaN(n)?'':Math.max(2,Math.min(8,n)); }
 function ehEntrada(){ return val('movimento')==='Entrada'; }
 
 window.onload=function(){
   document.getElementById('apiUrl').value=apiUrl();
   document.getElementById('bpHost').value=bpHost();
+  document.getElementById('zDark').value=zebraDark();
+  document.getElementById('zSpeed').value=zebraSpeed();
   document.getElementById('datarec').value=new Date().toISOString().slice(0,10);
   pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
-  if(apiUrl()){ carregarItens(); sugerirLote(); }
+  if(apiUrl()){ carregarItens(); carregarPalletCfg(); sugerirLote(); }
   detectar(true); trocarMov(); desenhar();
 };
 function salvarConfig(){
   ls('emb_api', document.getElementById('apiUrl').value.trim());
   ls('emb_bp', document.getElementById('bpHost').value.trim());
+  ls('emb_dark', document.getElementById('zDark').value);
+  ls('emb_speed', document.getElementById('zSpeed').value);
   pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
   if(apiUrl()){ carregarItens(); sugerirLote(); }
-  setStatus('Configuração salva.','ok');
+  desenhar();   // regenera o ZPL/prévia com os novos valores na hora
+  setStatus('Configuração salva.'+(zebraDark()===''&&zebraSpeed()===''?' Escuridão/velocidade em Auto (painel da impressora).':''),'ok');
 }
 
 /* ===================== API ===================== */
@@ -200,6 +219,25 @@ async function carregarItens(){
 async function sugerirLote(){
   try{ var d=await getAPI('?acaoemb=proxlote'); if(d&&d.ok&&d.lote && !val('lint')){ document.getElementById('lint').value=d.lote; desenhar(); } }catch(e){}
 }
+async function carregarPalletCfg(){
+  try{ var d=await getAPI('?acaoemb=palletcfg'); if(d&&d.ok&&d.cfg) PALLETCFG=d.cfg; }catch(e){}
+}
+function aplicarPallet(){
+  var mat=(val('material')||'').toUpperCase(), melhor=null, maisTok=0;
+  PALLETCFG.forEach(function(c){
+    var toks=c.chave.split(/\s+/).filter(Boolean);
+    if(toks.length && toks.every(function(t){ return mat.indexOf(t)>-1; }) && toks.length>maisTok){ maisTok=toks.length; melhor=c; }
+  });
+  if(melhor) document.getElementById('porPallet').value=melhor.qtd;  // auto; pode editar
+  calcEtiquetas();
+}
+function calcEtiquetas(){
+  var total=parseInt(val('qtd'),10)||0, pp=parseInt(val('porPallet'),10)||0;
+  var N=(pp>0 && total>pp)? Math.ceil(total/pp) : 1;
+  document.getElementById('numEtq').value=N;
+  var info=document.getElementById('desmInfo');
+  info.textContent = N>1 ? ('→ '+N+' etiquetas de '+pp+' un (última: '+(total-(N-1)*pp)+')') : '';
+}
 function filtrarItens(){
   var cat=val('categoria'), busca=val('busca').toUpperCase();
   var si=document.getElementById('item');
@@ -217,7 +255,8 @@ function aoEscolherItem(){
   var it=itemAtual();
   if(!it){ document.getElementById('saldoInfo').textContent=''; return; }
   document.getElementById('saldoInfo').textContent='Saldo '+it.saldo+' · reserva '+it.reserva+' · disponível '+it.disponivel+(it.status==='CHEIO'?'  ⚠️ estoque CHEIO':'');
-  if(ehEntrada() && !val('material')) document.getElementById('material').value=(it.desc||'').toUpperCase();
+  document.getElementById('material').value=(it.desc||'').toUpperCase();   // preenche sempre ao selecionar
+  aplicarPallet();   // puxa a qtd por pallet da config (editável)
   desenhar();
 }
 
@@ -229,7 +268,8 @@ function trocarMov(){
   document.getElementById('boxPrev').classList.toggle('hide', !ent);
   document.getElementById('boxImp').classList.toggle('hide', !ent);
   var b=document.getElementById('btnAcao'), mov=val('movimento');
-  if(ent){ b.textContent='🖨️ GERAR ETIQUETA E DAR ENTRADA'; b.style.background='var(--laranja)'; }
+  if(ent){ var imp=document.getElementById('imprimir'); var pr=!imp||imp.checked;
+     b.textContent=pr?'🖨️ GERAR ETIQUETA E DAR ENTRADA':'✅ DAR ENTRADA (sem etiqueta)'; b.style.background='var(--laranja)'; }
   else if(/transfer/i.test(mov)){ b.textContent='🚚 REGISTRAR TRANSFERÊNCIA'; b.style.background='var(--amarelo)';
      document.getElementById('lblDestino').textContent='Destino (filial)'; }
   else { b.textContent='🛑 REGISTRAR PERDA'; b.style.background='var(--vermelho)';
@@ -240,9 +280,11 @@ function trocarMov(){
 /* ===================== Browser Print ===================== */
 async function detectar(silent){
   try{
-    var r=await fetch(bpHost()+'/default?type=printer',{method:'GET'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    printer=await r.json(); pill('pBP','conectada','g');
+    var dev=null;
+    try{ var r=await fetch(bpHost()+'/default?type=printer'); if(r.ok){ var j=await r.json(); if(j && (j.uid||j.name)) dev=j; } }catch(e){}
+    if(!dev){ var ra=await fetch(bpHost()+'/available'); if(ra.ok){ var a=await ra.json(); var list=(a&&a.printer)||[]; if(list.length) dev=list[0]; } }
+    if(!dev) throw new Error('nenhuma impressora');
+    printer=dev; pill('pBP','conectada','g');
     document.getElementById('impInfo').textContent='Impressora: '+(printer.name||printer.uid||'padrão');
     if(!silent) setStatus('Impressora detectada.','ok');
   }catch(e){ printer=null; pill('pBP','sem conexão','r');
@@ -252,8 +294,13 @@ async function detectar(silent){
 async function enviarZPL(zpl){
   if(!printer) await detectar(true);
   if(!printer) throw new Error('Impressora não conectada.');
-  var r=await fetch(bpHost()+'/write',{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({device:printer,data:zpl})});
-  if(!r.ok) throw new Error('Browser Print HTTP '+r.status);
+  function tenta(){ return fetch(bpHost()+'/write',{method:'POST',
+     headers:{'Content-Type':'text/plain;charset=UTF-8'},
+     body:JSON.stringify({device:printer, data:zpl})}); }
+  var r=await tenta();
+  if(r.status>=500){ await detectar(true); r=await tenta(); }  // re-detecta a impressora e tenta 1x
+  if(!r.ok){ var t=''; try{ t=await r.text(); }catch(e){}
+    throw new Error('Browser Print HTTP '+r.status+(t?(' — '+String(t).replace(/\s+/g,' ').slice(0,180)):'')); }
 }
 async function imprimirTeste(){
   try{ await enviarZPL('^XA^CI28^FO60,60^A0N,60,60^FDTESTE DUNAX^FS^FO60,160^BQN,2,6^FDMA,TESTE^FS^XZ'); setStatus('Teste enviado.','ok'); }
@@ -275,60 +322,93 @@ function buildZPL(d){
   var tk=token(d), nome=esc(d.material)||' ';
   var w=Math.max(55,Math.min(110,Math.floor(1150/Math.max(1,nome.length)))), h=Math.round(w*1.35);
   var z='';
-  z+='CT~~CD,~CC^~CT~\n^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR4,4~SD15^JUS^LRN^CI28^XZ\n';
-  z+='^XA\n^MMT\n^PW831\n^LL1614\n^LS0\n';
-  z+='^FO10,11^GB809,1588,8^FS\n^FO9,11^GB280,1588,8^FS\n';
-  z+='^FO30,40^BQN,2,6^FDMA,'+tk+'^FS\n^FO9,315^GB280,0,6^FS\n';
-  z+='^FT71,1576^A0B,42,19^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
-  z+='^FT250,1560^A0B,'+h+','+w+'^FD'+nome+'^FS\n';
-  z+='^FO288,445^GB531,0,8^FS\n^FO447,15^GB0,430,6^FS\n';
-  z+='^FT300,438^A0B,42,28^FDQTD^FS\n^FT372,438^A0B,100,70^FD'+esc(d.qtd)+'^FS\n';
-  z+='^FT461,420^A0B,60,34^FDDATA RECEBIMENTO^FS\n^FT675,418^A0B,120,95^FD'+esc(d.datarec)+'^FS\n';
-  z+='^FO281,459^GB0,1133,8^FS\n^FO374,449^GB0,1150,8^FS\n^FO493,449^GB0,1150,8^FS\n^FO591,449^GB0,1143,8^FS\n^FO811,460^GB0,1133,8^FS\n';
-  z+='^FO377,873^GB332,0,8^FS\n^FO374,702^GB337,0,8^FS\n^FO281,1350^GB532,0,8^FS\n';
-  z+='^FT349,1573^A0B,44,33^FDFORNECEDOR^FS\n^FT432,860^A0B,44,33^FDLOTE^FS\n^FT486,860^A0B,44,33^FDINTERNO^FS\n';
-  z+='^FT432,1573^A0B,44,33^FB188,1,0,R^FDLOTE ^FS\n^FT486,1573^A0B,44,33^FB188,1,0,R^FDFORNECEDOR^FS\n';
-  z+='^FT570,860^A0B,44,33^FDDATA NF^FS\n^FT570,1567^A0B,44,33^FDNOTA FISCAL^FS\n';
-  z+='^FT670,1555^A0B,53,40^FDSITUAÇÃO^FS\n^FT670,864^A0B,53,40^FDRNC Nº^FS\n^FT770,1585^A0B,44,33^FDRESPONSÁVEL^FS\n';
-  z+='^FT471,643^A0B,48,38^FD'+esc(d.lint)+'^FS\n^FT355,1324^A0B,48,38^FD'+esc(d.forn)+'^FS\n';
-  z+='^FT576,1324^A0B,48,38^FD'+esc(d.nf)+'^FS\n^FT471,1324^A0B,48,38^FD'+esc(d.loteforn)+'^FS\n';
-  z+='^FT776,1324^A0B,48,38^FD'+esc(d.resp)+'^FS\n^FT666,1334^A0B,48,38^FD'+esc(d.sit)+'^FS\n';
-  z+='^FT666,684^A0B,48,38^FD'+esc(d.rnc)+'^FS\n^FT570,669^A0B,48,38^FD'+esc(d.datanf)+'^FS\n';
+  // Cabeçalho MÍNIMO, igual ao do teste que imprime perfeito: sem ^MTT/^MNW/~JS/^JUS,
+  // que são a config do Zebra Designer e enrugam/queimam o ribbon. A impressora usa a
+  // própria calibração. ^PR/~SD só entram se o usuário FORÇAR na Configuração.
+  var dark=zebraDark(), spd=zebraSpeed(), cfg='';
+  if(spd!=='')  cfg+='^PR'+spd+','+spd;
+  if(dark!=='') cfg+='~SD'+dark;
+  z+='^XA^CI28'+cfg+'\n^PW831\n^LL1614\n^LS0\n';
+  // ===== moldura + coluna de identificação =====
+  z+='^FO8,8^GB815,1598,4^FS\n';
+  z+='^FO8,8^GB281,1598,4^FS\n';
+  z+='^FO33,53^BQN,2,7^FDMA,'+tk+'^FS\n';     // QR centralizado (mag 7 p/ aliviar o ribbon)
+  z+='^FO8,330^GB281,0,4^FS\n';
+  z+='^FT52,1580^A0B,34,16^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
+  if(d.seq) z+='^FT282,1585^A0B,48,30^FDETIQ '+esc(d.seq)+'^FS\n';   // desmembramento 1/N
+  var matX=Math.round(150 + h/2);
+  z+='^FT'+matX+',1560^A0B,'+h+','+w+'^FD'+nome+'^FS\n';
+  // ===== banda superior: QTD (maior) + DATA RECEBIMENTO (menor) com autoescala p/ não cortar =====
+  z+='^FO289,445^GB534,0,4^FS\n';
+  z+='^FO585,8^GB0,437,4^FS\n';
+  var qv=esc(d.qtd), wQ=Math.max(46,Math.min(100,Math.floor(380/Math.max(1,String(qv).length)))), hQ=Math.round(wQ*1.5);
+  var dv=esc(d.datarec), wD=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length)))), hD=Math.round(wD*1.45);
+  z+='^FT345,436^A0B,40,24^FDQTD^FS\n';
+  z+='^FT'+Math.round(437+hQ/2)+',436^A0B,'+hQ+','+wQ+'^FD'+qv+'^FS\n';
+  z+='^FT800,436^A0B,40,22^FDDATA RECEBIMENTO^FS\n';
+  z+='^FT'+Math.round(650+hD/2)+',436^A0B,'+hD+','+wD+'^FD'+dv+'^FS\n';
+  // ===== grade de campos: 4 colunas x 2 linhas, tudo fechado =====
+  var gx=[289,422,554,686,819];
+  for(var c=0;c<gx.length;c++) z+='^FO'+gx[c]+',445^GB0,1161,4^FS\n';
+  z+='^FO289,1026^GB534,0,4^FS\n';
+  var campos=[
+    [{l:'FORNECEDOR',v:esc(d.forn)},   {l:'RESPONSÁVEL',v:esc(d.resp)}],
+    [{l:'LOTE INTERNO',v:esc(d.lint)}, {l:'LOTE FORNEC.',v:esc(d.loteforn)}],
+    [{l:'DATA NF',v:esc(d.datanf)},    {l:'NOTA FISCAL',v:esc(d.nf)}],
+    [{l:'SITUAÇÃO',v:esc(d.sit)},      {l:'RNC Nº',v:esc(d.rnc)}]
+  ];
+  var yBase=[1016, 1596];
+  for(var col=0; col<4; col++){
+    var cx1=gx[col], cx2=gx[col+1];
+    for(var r=0;r<2;r++){
+      var yb=yBase[r];
+      z+='^FT'+(cx1+40)+','+yb+'^A0B,30,16^FD'+campos[col][r].l+'^FS\n';
+      z+='^FT'+(cx2-14)+','+yb+'^A0B,46,30^FD'+campos[col][r].v+'^FS\n';
+    }
+  }
   z+='^PQ1,0,1,Y^XZ\n';
   return z;
 }
 
-/* ===================== prévia (paisagem) ===================== */
+/* ===================== prévia = render do próprio ZPL (idêntica à impressão) ===================== */
 function svgEsc(s){ return esc(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function zplToSVG(zpl){
+  var out='';
+  zpl.split('^FS').forEach(function(f){
+    var mFO=f.match(/\^F[OT](\d+),(\d+)/); if(!mFO) return;
+    var x=+mFO[1], y=+mFO[2];
+    var mGB=f.match(/\^GB(\d+),(\d+),(\d+)/);
+    if(mGB){ var w=+mGB[1],h=+mGB[2],t=+mGB[3];
+      if(w>0&&h>0) out+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#000" stroke-width="'+t+'"/>';
+      else if(h===0) out+='<line x1="'+x+'" y1="'+y+'" x2="'+(x+w)+'" y2="'+y+'" stroke="#000" stroke-width="'+t+'"/>';
+      else out+='<line x1="'+x+'" y1="'+y+'" x2="'+x+'" y2="'+(y+h)+'" stroke="#000" stroke-width="'+t+'"/>';
+      return;
+    }
+    if(f.indexOf('^BQ')>-1){ var mM=f.match(/\^BQ.,\d+,(\d+)/); var s=(mM?+mM[1]:6)*33;
+      out+='<rect x="'+x+'" y="'+y+'" width="'+s+'" height="'+s+'" fill="#000"/>'
+          +'<rect x="'+(x+20)+'" y="'+(y+20)+'" width="'+(s-40)+'" height="'+(s-40)+'" fill="#fff"/>'
+          +'<rect x="'+(x+46)+'" y="'+(y+46)+'" width="'+(s-92)+'" height="'+(s-92)+'" fill="#000"/>';
+      return;
+    }
+    var mFD=f.match(/\^FD([\s\S]*)$/); if(!mFD) return;
+    var mA=f.match(/\^A0B,(\d+),(\d+)/); var hh=mA?+mA[1]:30;
+    var txt=svgEsc(mFD[1]);
+    var anchor=/\^FB\d+,1,0,R/.test(f) ? ' text-anchor="end"' : '';
+    // a fonte do navegador é mais larga que a da Zebra: reduz um pouco para o
+    // texto não sobrepor e aproximar o comprimento do print.
+    var fs=Math.round(hh*0.76);
+    out+='<text x="'+x+'" y="'+y+'" font-size="'+fs+'" font-family="Arial, Helvetica, sans-serif"'+anchor
+       +' transform="rotate(-90 '+x+' '+y+')">'+txt+'</text>';
+  });
+  return '<svg viewBox="0 0 831 1614" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">'
+       +'<rect width="831" height="1614" fill="#fff"/>'+out+'</svg>';
+}
 function desenhar(){
   if(!ehEntrada()) return;
   var d=coletar();
-  var zo=document.getElementById('zplOut'); if(zo) zo.value=buildZPL(d);
-  var mat=svgEsc(d.material)||'—';
-  var fsMat=Math.max(9,Math.min(18,Math.floor(155/Math.max(1,mat.length))));
-  function T(x,y,t,s,o){ o=o||{}; return '<text x="'+x+'" y="'+y+'" font-size="'+s+'" fill="'+(o.fill||'#111')+'"'
-    +(o.b?' font-weight="bold"':'')+(o.anchor?' text-anchor="'+o.anchor+'"':'')
-    +(o.rot?' transform="rotate('+o.rot+' '+x+' '+y+')"':'')+'>'+svgEsc(t)+'</text>'; }
-  function cell(x,y,w,h,l,v,vs){ var s='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#111" stroke-width=".5"/>';
-    if(l) s+=T(x+2,y+5,l,3,{fill:'#555'}); if(v!=='' && v!=null) s+=T(x+w/2,y+h-3.5,v,vs||6,{b:true,anchor:'middle'}); return s; }
-  var g='<rect x="1" y="1" width="200" height="103" fill="#fff" stroke="#111" stroke-width="1"/>';
-  g+='<line x1="70" y1="1" x2="70" y2="104" stroke="#111" stroke-width="1"/>';
-  g+='<rect x="6" y="6" width="25" height="25" fill="#111"/><rect x="9" y="9" width="19" height="19" fill="#fff"/><rect x="13" y="13" width="11" height="11" fill="#111"/>';
-  g+='<line x1="1" y1="35" x2="70" y2="35" stroke="#111" stroke-width=".5"/>';
-  g+=T(5,101,'IDENTIFICAÇÃO DE MATERIAL',3,{fill:'#555',rot:-90});
-  g+=T(42,68,mat,fsMat,{b:true,anchor:'middle'});
-  g+=cell(70,1,34,23,'QTD',svgEsc(d.qtd),12);
-  g+=cell(104,1,97,23,'DATA RECEBIMENTO',svgEsc(d.datarec),13);
-  g+=cell(70,24,50,27,'LOTE INTERNO',svgEsc(d.lint),6);
-  g+=cell(70,51,50,27,'DATA NF',svgEsc(d.datanf),6);
-  g+=cell(70,78,50,26,'RNC Nº',svgEsc(d.rnc),6);
-  var ry=24,rh=16;
-  g+=cell(120,ry,81,rh,'FORNECEDOR',svgEsc(d.forn),6); ry+=rh;
-  g+=cell(120,ry,81,rh,'LOTE FORNECEDOR',svgEsc(d.loteforn),6); ry+=rh;
-  g+=cell(120,ry,81,rh,'NOTA FISCAL',svgEsc(d.nf),6); ry+=rh;
-  g+=cell(120,ry,81,rh,'SITUAÇÃO',svgEsc(d.sit),6); ry+=rh;
-  g+=cell(120,ry,81,16,'RESPONSÁVEL',svgEsc(d.resp),6);
-  document.getElementById('etq').innerHTML='<svg viewBox="0 0 202 105" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+  var zpl=buildZPL(d);
+  var zo=document.getElementById('zplOut'); if(zo) zo.value=zpl;
+  document.getElementById('etq').innerHTML=zplToSVG(zpl);
 }
 
 /* ===================== confirmar ===================== */
@@ -344,9 +424,8 @@ async function entradaComEtiqueta(it){
   var d=coletar();
   if(!d.material){ setStatus('Informe o material (texto grande).','erro'); return; }
   if(!(d.qtd>0)){ setStatus('Informe a quantidade.','erro'); return; }
-  var zpl=buildZPL(d); var zo=document.getElementById('zplOut'); if(zo) zo.value=zpl;
   setStatus('Registrando entrada…','info');
-  // 1) dá entrada no estoque + loga
+  // 1) entrada do TOTAL da NF, uma única vez
   var q='?acaoemb=receber&cod='+encodeURIComponent(d.cod)+'&qtd='+encodeURIComponent(d.qtd)
     +'&loteforn='+encodeURIComponent(d.loteforn)+'&lint='+encodeURIComponent(d.lint)
     +'&forn='+encodeURIComponent(d.forn)+'&nf='+encodeURIComponent(d.nf)+'&datanf='+encodeURIComponent(d.datanf)
@@ -354,11 +433,23 @@ async function entradaComEtiqueta(it){
     +'&resp='+encodeURIComponent(d.resp)+'&token='+encodeURIComponent(token(d));
   var r=await getAPI(q);
   if(!(r && r.ok)){ setStatus('🚨 '+((r&&r.erro)||'falha ao dar entrada'),'erro'); return; }
-  // 2) imprime a etiqueta
-  var msgImp='';
-  try{ await enviarZPL(zpl); }catch(e){ msgImp=' (⚠️ não imprimiu: '+e.message+')'; }
+  // 2) imprime (opcional), DESMEMBRANDO em etiquetas por pallet/caixa
+  var pp=parseInt(val('porPallet'),10)||0;
+  var N=(pp>0 && d.qtd>pp)? Math.ceil(d.qtd/pp) : 1;
+  var ultimoZpl=buildZPL(Object.assign({},d,{qtd:(N>1?pp:d.qtd), seq:(N>1?'1/'+N:'')}));
+  var zo=document.getElementById('zplOut'); if(zo) zo.value=ultimoZpl;
+  var chk=document.getElementById('imprimir'), msgImp='';
+  if(chk && chk.checked){
+    for(var i=1;i<=N;i++){
+      var per=(N===1)? d.qtd : (i<N? pp : d.qtd-(N-1)*pp);
+      var dd=Object.assign({},d,{ qtd:per, lint:(N>1? d.lint+'-'+i : d.lint), seq:(N>1? (i+'/'+N):'') });
+      try{ await enviarZPL(buildZPL(dd)); }
+      catch(e){ msgImp=' (⚠️ falhou na etiqueta '+i+'/'+N+': '+e.message+')'; break; }
+    }
+    if(!msgImp) msgImp = N>1 ? (' · '+N+' etiquetas impressas') : '';
+  } else { msgImp=' (sem etiqueta)'; }
   setStatus('✔ '+(r.mensagem||'Entrada registrada')+msgImp,'ok');
-  historico.unshift({t:new Date(), txt:'ENTRADA +'+d.qtd+' '+(d.material), zpl:zpl, ok:true});
+  historico.unshift({t:new Date(), txt:'ENTRADA +'+d.qtd+' '+d.material+(N>1?(' ('+N+' etiq.)'):''), zpl:ultimoZpl, ok:true});
   renderHist();
   var n=parseInt(d.lint,10); if(!isNaN(n)) document.getElementById('lint').value=n+1; else sugerirLote();
   await carregarItens(); desenhar();
