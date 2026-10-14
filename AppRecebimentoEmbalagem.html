@@ -74,7 +74,7 @@
         </div>
         <div class="lin">
           <div style="flex:0 0 160px"><label>Qtd por pallet/caixa</label><input id="porPallet" type="number" min="0" placeholder="auto (config)" oninput="calcEtiquetas()"></div>
-          <div style="flex:0 0 140px"><label>Nº de etiquetas</label><input id="numEtq" readonly value="1" style="background:#eef5fb;font-weight:bold"></div>
+          <div style="flex:0 0 140px"><label>Nº de etiquetas (pallets)</label><input id="numEtq" type="number" min="1" value="1" oninput="calcPorPallet()" style="background:#eef5fb;font-weight:bold"></div>
           <div style="flex:1;align-self:flex-end"><div class="mini" id="desmInfo" style="padding-bottom:12px"></div></div>
         </div>
         <div class="lin">
@@ -267,12 +267,24 @@ function aplicarPallet(){
   if(melhor) document.getElementById('porPallet').value=melhor.qtd;  // auto; pode editar
   calcEtiquetas();
 }
+// "Qtd por pallet" → calcula o Nº de etiquetas
 function calcEtiquetas(){
   var total=parseInt(val('qtd'),10)||0, pp=parseInt(val('porPallet'),10)||0;
   var N=(pp>0 && total>pp)? Math.ceil(total/pp) : 1;
   document.getElementById('numEtq').value=N;
-  var info=document.getElementById('desmInfo');
-  info.textContent = N>1 ? ('→ '+N+' etiquetas de '+pp+' un (última: '+(total-(N-1)*pp)+')') : '';
+  mostraDesm(total,N);
+}
+// "Nº de etiquetas" (editável) → calcula a qtd por pallet. Deixa o operador forçar o nº de pallets.
+function calcPorPallet(){
+  var total=parseInt(val('qtd'),10)||0, N=parseInt(val('numEtq'),10)||1; if(N<1) N=1;
+  var pp=(N>1)? Math.ceil(total/N) : 0;
+  document.getElementById('porPallet').value = pp>0 ? pp : '';
+  mostraDesm(total,N);
+}
+function mostraDesm(total,N){
+  var pp=(N>1)? Math.ceil(total/N) : total;
+  document.getElementById('desmInfo').textContent =
+    N>1 ? ('→ '+N+' etiquetas de '+pp+' un (última: '+(total-(N-1)*pp)+')') : '';
 }
 function filtrarItens(){
   var cat=val('categoria'), busca=val('busca').toUpperCase();
@@ -346,6 +358,17 @@ async function imprimirTeste(){
 /* ===================== dados / token / ZPL ===================== */
 function limpa(s){ return String(s||'').replace(/[|,]/g,' ').trim(); }
 function brDate(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0].slice(2)):iso; }
+// normaliza QUALQUER data para dd/mm/aa: ISO (yyyy-mm-dd), dd/mm/aaaa, objeto/string de Date
+// ("Tue Oct 13 2026 04:00:00 GMT-0300 (...)"), etc. Usado na hora de imprimir p/ nunca sair cru.
+function dBR(x){
+  if(x==null) return '';
+  var s=String(x).trim(); if(!s) return '';
+  if(s.indexOf('/')>-1){ var q=s.split('/'); if(q.length===3){ var y=q[2].length>2?q[2].slice(-2):('0'+q[2]).slice(-2); return ('0'+q[0]).slice(-2)+'/'+('0'+q[1]).slice(-2)+'/'+y; } return s; }
+  var iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(iso) return iso[3]+'/'+iso[2]+'/'+iso[1].slice(2);
+  var d=new Date(s);
+  if(!isNaN(d.getTime())) return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+(''+d.getFullYear()).slice(-2);
+  return s.slice(0,10);
+}
 function coletar(){
   return { cod:val('item'), material:(val('material')||'').toUpperCase(), qtd:parseInt(val('qtd'),10)||0,
     forn:(val('forn')||'').toUpperCase(), lint:val('lint'), nf:val('nf'), datanf:brDate(val('datanf')),
@@ -403,7 +426,7 @@ function buildZPL(d){
   z+='^FO289,445^GB534,0,4^FS\n';
   z+='^FO585,8^GB0,437,4^FS\n';
   var qv=esc(d.qtd), wQ=Math.max(46,Math.min(100,Math.floor(380/Math.max(1,String(qv).length)))), hQ=Math.round(wQ*1.5);
-  var dv=esc(d.datarec), wDb=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length))));
+  var dv=dBR(d.datarec), wDb=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length))));
   var wD=Math.min(Math.round(wDb*1.15), Math.floor(428/Math.max(1,String(dv).length))), hD=Math.round(wD*1.45);  // +15%, limitado p/ não cortar
   z+='^FT345,436^A0B,40,24^FDQTD^FS\n';
   z+='^FT'+Math.round(437+hQ/2)+',436^A0B,'+hQ+','+wQ+'^FD'+qv+'^FS\n';
@@ -416,7 +439,7 @@ function buildZPL(d){
   var campos=[
     [{l:'FORNECEDOR',v:esc(d.forn)},   {l:'RESPONSÁVEL',v:esc(d.resp)}],
     [{l:'LOTE INTERNO',v:esc(d.lint)}, {l:'LOTE FORNEC.',v:esc(d.loteforn)}],
-    [{l:'DATA NF',v:esc(d.datanf)},    {l:'NOTA FISCAL',v:esc(d.nf)}],
+    [{l:'DATA NF',v:dBR(d.datanf)},    {l:'NOTA FISCAL',v:esc(d.nf)}],
     [{l:'SITUAÇÃO',v:esc(d.sit)},      {l:'RNC Nº',v:esc(d.rnc)}]
   ];
   var yBase=[1016, 1596];
@@ -495,9 +518,10 @@ async function entradaComEtiqueta(it){
     +'&resp='+encodeURIComponent(d.resp)+'&token='+encodeURIComponent(token(d));
   var r=await getAPI(q);
   if(!(r && r.ok)){ setStatus('🚨 '+((r&&r.erro)||'falha ao dar entrada'),'erro'); return; }
-  // 2) imprime (opcional), DESMEMBRANDO em etiquetas por pallet/caixa
-  var pp=parseInt(val('porPallet'),10)||0;
-  var N=(pp>0 && d.qtd>pp)? Math.ceil(d.qtd/pp) : 1;
+  // 2) imprime (opcional), DESMEMBRANDO em etiquetas por pallet/caixa.
+  // O Nº de etiquetas (campo editável) manda: define quantos pallets imprimir.
+  var N=parseInt(val('numEtq'),10)||1; if(N<1) N=1;
+  var pp=(N>1)? Math.ceil(d.qtd/N) : d.qtd;
   var ultimoZpl=buildZPL(Object.assign({},d,{qtd:(N>1?pp:d.qtd), seq:(N>1?'1/'+N:'')}));
   var zo=document.getElementById('zplOut'); if(zo) zo.value=ultimoZpl;
   var chk=document.getElementById('imprimir'), msgImp='';
