@@ -133,6 +133,29 @@
         <div id="rpStatus" class="mini" style="margin-top:6px"></div>
         <div id="rpLista"></div>
       </div>
+
+      <div class="cartao">
+        <h2>Desmembrar ETIQUETA PAI em caixas</h2>
+        <div class="mini" style="margin-bottom:8px">Para rótulos que já entraram no estoque e serão enviados em caixas separadas. Localize o pallet/PAI (bipe o QR ou busque), informe quantos por caixa e imprima as etiquetas filhas. <b>Não gera nova entrada</b> — só reetiqueta.</div>
+        <div class="lin">
+          <div><label>Buscar PAI (item, lote interno, NF)</label>
+            <input id="paiBusca" placeholder="digite e Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPai();}"></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><button class="b-azul" onclick="buscarPai()">🔍 Buscar</button></div>
+        </div>
+        <label>Ou bipe o QR da etiqueta PAI</label>
+        <input id="paiQR" placeholder="Aponte o leitor e bipe o QR do pallet…" onkeydown="if(event.key==='Enter'){event.preventDefault();lerPaiPorQR();}">
+        <div id="paiStatus" class="mini" style="margin-top:6px"></div>
+        <div id="paiLista"></div>
+        <div id="paiPainel" class="hide" style="margin-top:12px;border-top:1px solid #eef;padding-top:12px">
+          <div class="mini" id="paiInfo" style="margin-bottom:8px"></div>
+          <div class="lin">
+            <div style="flex:0 0 160px"><label>Qtd por caixa</label><input id="paiPorCaixa" type="number" min="1" placeholder="auto (config)" oninput="calcPaiCaixas()"></div>
+            <div style="flex:0 0 140px"><label>Nº de caixas</label><input id="paiNumCaixas" readonly value="1" style="background:#eef5fb;font-weight:bold"></div>
+            <div style="flex:1;align-self:flex-end"><div class="mini" id="paiDesmInfo" style="padding-bottom:12px"></div></div>
+          </div>
+          <button class="b-azul" onclick="imprimirCaixasPai()" style="width:100%;margin-top:4px">🖨️ Imprimir etiquetas de caixa</button>
+        </div>
+      </div>
     </div>
 
     <!-- ======== PRÉVIA + CONFIG ======== -->
@@ -331,6 +354,18 @@ function coletar(){
 }
 function token(d){ return 'EMB|'+limpa(d.cod)+'|'+(d.qtd||0)+'|'+limpa(d.loteforn)+'|'+limpa(d.lint); }
 function esc(s){ return String(s==null?'':s); }
+// divide o nome do produto em 2 linhas equilibradas (pelas palavras; sem espaço, corta no meio)
+function quebraNome(s){
+  var words=String(s).split(' ').filter(Boolean);
+  if(words.length<2){ var m=Math.ceil(s.length/2); return [s.slice(0,m), s.slice(m)]; }
+  var total=s.length, acc=0, best=0, bestDiff=1e9;
+  for(var i=0;i<words.length-1;i++){
+    acc+=words[i].length+1;
+    var diff=Math.abs(acc-total/2);
+    if(diff<bestDiff){ bestDiff=diff; best=i; }
+  }
+  return [ words.slice(0,best+1).join(' '), words.slice(best+1).join(' ') ];
+}
 function buildZPL(d){
   var tk=token(d), nome=esc(d.material)||' ';
   var w=Math.max(55,Math.min(110,Math.floor(1150/Math.max(1,nome.length)))), h=Math.round(w*1.35);
@@ -349,13 +384,27 @@ function buildZPL(d){
   z+='^FO8,330^GB281,0,4^FS\n';
   z+='^FT52,1580^A0B,34,16^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
   if(d.seq) z+='^FT282,1585^A0B,48,30^FDETIQ '+esc(d.seq)+'^FS\n';   // desmembramento 1/N
-  var matX=Math.round(150 + h/2);
-  z+='^FT'+matX+',1560^A0B,'+h+','+w+'^FD'+nome+'^FS\n';
+  // ----- nome do produto: +15% de fonte e quebra em 2 linhas se passar da área de identificação -----
+  var w15=Math.round(w*1.15);                 // +15% sobre o tamanho base
+  var LMAT=1215;                              // comprimento útil da coluna (sentido vertical)
+  if(nome.length*w15<=LMAT){                  // cabe em 1 linha
+    var h15=Math.round(w15*1.35), matX=Math.round(150+h15/2);
+    z+='^FT'+matX+',1560^A0B,'+h15+','+w15+'^FD'+nome+'^FS\n';
+  } else {                                    // passa da área → quebra em 2 linhas
+    var ln=quebraNome(nome), maxc=Math.max(ln[0].length,ln[1].length);
+    var g=10, ws=Math.min(w15, Math.floor(LMAT/Math.max(1,maxc)), Math.floor((265-g)/2.7));
+    var hs=Math.round(ws*1.35), cY=957;
+    var y1=Math.min(1575,Math.round(cY+(ln[0].length*ws)/2));
+    var y2=Math.min(1575,Math.round(cY+(ln[1].length*ws)/2));
+    z+='^FT'+Math.round(150+hs+g/2)+','+y1+'^A0B,'+hs+','+ws+'^FD'+ln[0]+'^FS\n';  // 1ª linha (direita)
+    z+='^FT'+Math.round(150-g/2)+','+y2+'^A0B,'+hs+','+ws+'^FD'+ln[1]+'^FS\n';     // 2ª linha (esquerda)
+  }
   // ===== banda superior: QTD (maior) + DATA RECEBIMENTO (menor) com autoescala p/ não cortar =====
   z+='^FO289,445^GB534,0,4^FS\n';
   z+='^FO585,8^GB0,437,4^FS\n';
   var qv=esc(d.qtd), wQ=Math.max(46,Math.min(100,Math.floor(380/Math.max(1,String(qv).length)))), hQ=Math.round(wQ*1.5);
-  var dv=esc(d.datarec), wD=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length)))), hD=Math.round(wD*1.45);
+  var dv=esc(d.datarec), wDb=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length))));
+  var wD=Math.min(Math.round(wDb*1.15), Math.floor(428/Math.max(1,String(dv).length))), hD=Math.round(wD*1.45);  // +15%, limitado p/ não cortar
   z+='^FT345,436^A0B,40,24^FDQTD^FS\n';
   z+='^FT'+Math.round(437+hQ/2)+',436^A0B,'+hQ+','+wQ+'^FD'+qv+'^FS\n';
   z+='^FT800,436^A0B,40,22^FDDATA RECEBIMENTO^FS\n';
@@ -557,6 +606,91 @@ async function reimprimirPorQR(){
   }catch(e){ rpSet('Falha: '+e.message); }
 }
 function limpaCodigoQR(txt){ var c=String(txt||'').trim(); if(c.toUpperCase().indexOf('MA,')===0) c=c.substring(3).trim(); return c; }
+
+/* ===================== DESMEMBRAMENTO DA ETIQUETA PAI (reetiqueta em caixas) ===================== */
+var PAILISTA=[], PAI=null;
+function paiSet(t){ document.getElementById('paiStatus').textContent=t||''; }
+function qtdPorPalletDe(mat){
+  mat=(mat||'').toUpperCase(); var melhor=null, maisTok=0;
+  PALLETCFG.forEach(function(c){
+    var toks=c.chave.split(/\s+/).filter(Boolean);
+    if(toks.length && toks.every(function(t){ return mat.indexOf(t)>-1; }) && toks.length>maisTok){ maisTok=toks.length; melhor=c; }
+  });
+  return melhor? melhor.qtd : 0;
+}
+async function buscarPai(){
+  if(!apiUrl()){ paiSet('Configure a URL da API primeiro.'); return; }
+  paiSet('Buscando…');
+  try{
+    var d=await getAPI('?acaoemb=recebimentos&q='+encodeURIComponent(val('paiBusca'))+'&limit=50');
+    PAILISTA=(d&&d.ok&&d.recs)?d.recs:[];
+    renderPaiList();
+    paiSet(PAILISTA.length? (PAILISTA.length+' encontrado(s) — escolha o pallet PAI.') : 'Nada encontrado.');
+  }catch(e){ paiSet('Falha na busca: '+e.message); }
+}
+function renderPaiList(){
+  var box=document.getElementById('paiLista'); box.innerHTML='';
+  PAILISTA.slice(0,50).forEach(function(r,i){
+    var div=document.createElement('div'); div.className='hist';
+    div.innerHTML='<span><b>'+(r.material||r.desc)+'</b> · '+r.qtd+' un · lote '+(r.lint||'—')
+      +' <span style="color:#999">('+(r.data||'').slice(0,10)+' · NF '+(r.nf||'-')+')</span></span>';
+    var b=document.createElement('button'); b.className='b-cinza'; b.style.cssText='padding:6px 12px;font-size:12px';
+    b.textContent='Selecionar'; b.onclick=function(){ selecionarPai(r); };
+    div.appendChild(b); box.appendChild(div);
+  });
+}
+function selecionarPai(r){
+  PAI=recToD(r);               // mesma estrutura usada em buildZPL
+  PAI._base=String(r.lint||'').split('-')[0];
+  document.getElementById('paiLista').innerHTML='';
+  document.getElementById('paiBusca').value=''; document.getElementById('paiQR').value='';
+  document.getElementById('paiPainel').classList.remove('hide');
+  document.getElementById('paiInfo').innerHTML='PAI: <b>'+PAI.material+'</b> · total '+PAI.qtd+' un · lote '+(PAI.lint||'—')+' · forn '+(PAI.forn||'—');
+  var pc=qtdPorPalletDe(PAI.material);
+  document.getElementById('paiPorCaixa').value=pc||'';
+  calcPaiCaixas();
+  paiSet('✔ PAI selecionado. Informe a qtd por caixa e imprima.');
+}
+async function lerPaiPorQR(){
+  var cod=limpaCodigoQR(val('paiQR')); document.getElementById('paiQR').value='';
+  if(!cod){ return; }
+  if(cod.indexOf('EMB|')!==0){ paiSet('QR não reconhecido: '+cod); return; }
+  var p=cod.split('|'); var codEmb=p[1]||'', lint=p[4]||'', base=lint.split('-')[0];
+  paiSet('Procurando o recebimento do lote '+base+'…');
+  try{
+    var d=await getAPI('?acaoemb=recebimentos&q='+encodeURIComponent(base)+'&limit=50');
+    var recs=(d&&d.ok&&d.recs)?d.recs:[], r=null;
+    for(var j=0;j<recs.length;j++){ if(String(recs[j].lint)===String(base) && (!codEmb||String(recs[j].cod).toUpperCase()===codEmb.toUpperCase())){ r=recs[j]; break; } }
+    if(!r){ for(var m=0;m<recs.length;m++){ if(String(recs[m].lint)===String(base)){ r=recs[m]; break; } } }
+    if(!r){ paiSet('Não achei o recebimento do lote '+base+'.'); return; }
+    selecionarPai(r);
+  }catch(e){ paiSet('Falha: '+e.message); }
+}
+function calcPaiCaixas(){
+  if(!PAI){ return; }
+  var total=parseInt(PAI.qtd,10)||0, pc=parseInt(val('paiPorCaixa'),10)||0;
+  var N=(pc>0)? Math.ceil(total/pc) : 1;
+  document.getElementById('paiNumCaixas').value=N;
+  var info=document.getElementById('paiDesmInfo');
+  info.textContent = (pc>0 && N>1) ? ('→ '+N+' caixas de '+pc+' un (última: '+(total-(N-1)*pc)+')')
+                   : (pc>0 ? '→ 1 caixa de '+total+' un' : '');
+}
+async function imprimirCaixasPai(){
+  if(!PAI){ paiSet('Selecione um PAI primeiro.'); return; }
+  var total=parseInt(PAI.qtd,10)||0, pc=parseInt(val('paiPorCaixa'),10)||0;
+  if(!(pc>0)){ paiSet('Informe a qtd por caixa.'); return; }
+  var N=Math.ceil(total/pc), base=PAI._base||String(PAI.lint||'').split('-')[0];
+  paiSet('Imprimindo '+N+' etiqueta(s) de caixa…');
+  for(var i=1;i<=N;i++){
+    var per=(i<N)? pc : (total-(N-1)*pc);
+    var dd=Object.assign({}, PAI, { qtd:per, lint:(N>1? base+'-CX-'+i : base), seq:(N>1? (i+'/'+N):'') });
+    try{ await enviarZPL(buildZPL(dd)); }
+    catch(e){ paiSet('⚠️ Falhou na caixa '+i+'/'+N+': '+e.message); return; }
+  }
+  paiSet('✔ '+N+' etiqueta(s) de caixa impressa(s) · lote '+base+' ('+PAI.material+').');
+  historico.unshift({t:new Date(), txt:'CAIXAS PAI '+base+' · '+N+'×'+pc+' un '+PAI.material, ok:true});
+  renderHist();
+}
 </script>
 </body>
 </html>
