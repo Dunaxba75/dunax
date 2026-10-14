@@ -407,21 +407,15 @@ function buildZPL(d){
   z+='^FO8,330^GB281,0,4^FS\n';
   z+='^FT52,1580^A0B,34,16^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
   if(d.seq) z+='^FT282,1585^A0B,48,30^FDETIQ '+esc(d.seq)+'^FS\n';   // desmembramento 1/N
-  // ----- nome do produto: +15% de fonte e quebra em 2 linhas se passar da área de identificação -----
-  var w15=Math.round(w*1.15);                 // +15% sobre o tamanho base
-  var LMAT=1215;                              // comprimento útil da coluna (sentido vertical)
-  if(nome.length*w15<=LMAT){                  // cabe em 1 linha
-    var h15=Math.round(w15*1.35), matX=Math.round(150+h15/2);
-    z+='^FT'+matX+',1560^A0B,'+h15+','+w15+'^FD'+nome+'^FS\n';
-  } else {                                    // passa da área → quebra em 2 linhas
-    var ln=quebraNome(nome), maxc=Math.max(ln[0].length,ln[1].length);
-    var g=10, ws=Math.min(w15, Math.floor(LMAT/Math.max(1,maxc)), Math.floor((265-g)/2.7));
-    var hs=Math.round(ws*1.35), cY=957;
-    var y1=Math.min(1575,Math.round(cY+(ln[0].length*ws)/2));
-    var y2=Math.min(1575,Math.round(cY+(ln[1].length*ws)/2));
-    z+='^FT'+Math.round(150+hs+g/2)+','+y1+'^A0B,'+hs+','+ws+'^FD'+ln[0]+'^FS\n';  // 1ª linha (direita)
-    z+='^FT'+Math.round(150-g/2)+','+y2+'^A0B,'+hs+','+ws+'^FD'+ln[1]+'^FS\n';     // 2ª linha (esquerda)
-  }
+  // ----- nome do produto: 1 LINHA só, o MAIOR possível p/ leitura de longe no porta-pallet -----
+  // Enche o comprimento da coluna; glifos grandes, sem quebra. Centro deslocado p/ não bater na legenda lateral.
+  var len=Math.max(1,nome.length);
+  var LMAT=1250, WMAX=180, HMAX=205, CX=182, CY=967;
+  var wm=Math.max(28, Math.min(Math.floor(LMAT/len), WMAX));   // largura do caractere (ao longo do comprimento)
+  var hm=Math.min(Math.round(wm*1.5), HMAX);                   // altura (ao longo da largura da coluna)
+  var matX=Math.round(CX+hm/2);
+  var by=Math.min(1592, Math.round(CY+(len*wm)/2));            // centraliza no comprimento da coluna
+  z+='^FT'+matX+','+by+'^A0B,'+hm+','+wm+'^FD'+nome+'^FS\n';
   // ===== banda superior: QTD (maior) + DATA RECEBIMENTO (menor) com autoescala p/ não cortar =====
   z+='^FO289,445^GB534,0,4^FS\n';
   z+='^FO585,8^GB0,437,4^FS\n';
