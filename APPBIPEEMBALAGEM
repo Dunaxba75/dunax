@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Abastecimento de Embalagem na Linha — DUNAX Envase</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{ --azul:#1F3A6E; --laranja:#F26B21; --verde:#1a7a44; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#eef1f5;color:#222;max-width:640px;margin:0 auto;}
+  h1{font-size:19px;color:var(--azul);margin:0 0 2px;}
+  .sub{color:#666;font-size:12.5px;margin-bottom:14px;}
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  label{display:block;font-size:12px;font-weight:bold;color:#555;margin:8px 0 4px;}
+  input,select{width:100%;padding:13px;font-size:17px;border:1px solid #c7ccd4;border-radius:8px;}
+  #qr{font-family:monospace;letter-spacing:1px;border:2px solid var(--azul);}
+  .linha{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .linha>div{flex:1;min-width:150px}
+  button{padding:14px 16px;font-size:16px;font-weight:bold;border:none;border-radius:9px;background:var(--laranja);color:#fff;cursor:pointer;width:100%;margin-top:10px;}
+  button.sec{background:var(--azul);font-size:14px;}
+  button.big{padding:18px;font-size:18px;}
+  button:disabled{background:#aab;}
+  .status{padding:12px 13px;border-radius:8px;margin-top:12px;font-size:15px;line-height:1.4;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;}
+  #reader{width:100%;margin-top:12px;border:1px solid #e3e7ee;border-radius:8px;overflow:hidden;display:none}
+  .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+  .hist{font-size:13px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px}
+  details{margin-top:6px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul)}
+</style>
+</head>
+<body>
+  <h1>Abastecimento de Embalagem na Linha</h1>
+  <div class="sub">Envase DUNAX · bipe o QR da embalagem que vai abastecer a linha. Marca o <b>lote ativo</b> (a baixa ocorre na bipagem da caixa). Funciona com leitor de QR (PC) ou câmera (celular).</div>
+
+  <div class="cartao">
+    <div style="margin-bottom:8px">API: <span id="pApi" class="pill n">—</span></div>
+    <label>Linha de envase</label>
+    <select id="linha"><option value="">Carregando…</option></select>
+
+    <label style="margin-top:12px">Bipe ou digite o código do pallet</label>
+    <div class="linha">
+      <div><input id="qr" placeholder="Aponte o leitor e bipe… (ou digite)" autocomplete="off"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();biparAgora();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" style="width:auto" onclick="biparAgora()">Registrar</button></div>
+    </div>
+    <button class="big" id="btnCam" onclick="abrirCamera()">📷 Usar câmera do celular</button>
+    <div id="reader"></div>
+    <button class="sec" id="btnParar" onclick="pararCamera()" style="display:none">■ Parar câmera</button>
+
+    <div id="status" class="status info">Pronto para bipar.</div>
+  </div>
+
+  <div class="cartao">
+    <strong style="color:var(--azul);font-size:14px">Últimas entradas</strong>
+    <div id="hist"></div>
+  </div>
+
+  <div class="cartao">
+    <strong style="color:var(--azul);font-size:14px">Rastreio por lote</strong>
+    <div class="sub" style="margin:4px 0 8px">Digite ou bipe um lote (da embalagem ou de produção) e veja quanto foi consumido, por linha e por lote de produção.</div>
+    <div class="linha">
+      <div><input id="rastLote" placeholder="Lote (ex.: LT-000123)" autocomplete="off"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();consultarLote();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" style="width:auto" onclick="consultarLote()">Consultar</button></div>
+    </div>
+    <div id="rastStatus" class="status info" style="display:none"></div>
+    <div id="rastResult"></div>
+  </div>
+
+  <details>
+    <summary>Configuração</summary>
+    <div class="cartao" style="margin-top:8px">
+      <label>URL da API do Envase (Web App /exec da planilha FR-LAB-01)</label>
+      <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <button class="sec" onclick="salvarConfig()">Salvar</button>
+    </div>
+  </details>
+
+<script>
+  var qrScanner=null, historico=[];
+
+  function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+  function val(id){ return (document.getElementById(id).value||'').trim(); }
+  function apiUrl(){ return (ls('emb_api')||'').trim().split('?')[0].split('#')[0]; }
+  function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
+  function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
+  function focoQR(){ try{ document.getElementById('qr').focus(); }catch(e){} }
+
+  window.onload=function(){
+    document.getElementById('apiUrl').value=apiUrl();
+    pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'r');
+    if(!apiUrl()){ setStatus('Cole a URL da API do Envase em "Configuração".','info'); }
+    else carregarLinhas();
+    focoQR();
+  };
+  function salvarConfig(){ ls('emb_api', val('apiUrl')); pill('pApi','configurada','g'); carregarLinhas(); setStatus('URL salva.','ok'); focoQR(); }
+
+  async function getAPI(params){
+    var r=await fetch(apiUrl()+params,{method:'GET'});
+    var t=await r.text();
+    try{ return JSON.parse(t); }
+    catch(e){
+      var msg=t.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
+      return {ok:false, erro:'A API não retornou JSON (HTTP '+r.status+'). Resposta: '+(msg||'(vazia)')};
+    }
+  }
+  async function postAPI(obj){ var r=await fetch(apiUrl(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(obj)}); return await r.json(); }
+
+  async function carregarLinhas(){
+    var sel=document.getElementById('linha');
+    var padrao=['L1','L2','L3','L4','L5'];
+    try{
+      var d=await getAPI('?acaoemb=linhas');
+      var linhas=(d && d.ok && d.linhas && d.linhas.length) ? d.linhas : padrao;
+      sel.innerHTML='<option value="">Selecione a linha…</option>';
+      linhas.forEach(function(l){ sel.innerHTML+='<option value="'+l+'">'+l+'</option>'; });
+      var ult=ls('emb_linha'); if(ult) sel.value=ult;
+      if(!(d && d.ok && d.linhas && d.linhas.length)){
+        setStatus('Linhas padrão (L1–L5). Resposta da API: '+JSON.stringify(d),'info');
+      }
+    }catch(e){
+      sel.innerHTML='<option value="">Selecione a linha…</option>';
+      padrao.forEach(function(l){ sel.innerHTML+='<option value="'+l+'">'+l+'</option>'; });
+      setStatus('Não carregou linhas da API ('+e+'). Usando L1–L5 — pode testar mesmo assim.','info');
+    }
+  }
+
+  function limparCodigo(txt){
+    var c=String(txt||'').trim();
+    if(c.toUpperCase().indexOf('MA,')===0) c=c.substring(3).trim(); // remove prefixo de modo do ZPL
+    return c;
+  }
+
+  async function biparAgora(){
+    var cod=limparCodigo(val('qr'));
+    var linha=val('linha');
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(!linha){ setStatus('Selecione a linha de envase.','erro'); return; }
+    if(!cod){ setStatus('Bipe ou digite o código do pallet.','erro'); focoQR(); return; }
+    ls('emb_linha', linha);
+    setStatus('Registrando '+cod+'…','info');
+    document.getElementById('qr').value='';
+    try{
+      // GET em vez de POST: o Apps Script redireciona o POST cross-origin e o
+      // navegador barra a resposta ("Failed to fetch"). O GET passa igual às linhas.
+      var r=await getAPI('?acaoemb=entrar&cc='+encodeURIComponent(cod)+'&linha='+encodeURIComponent(linha));
+      if(r && r.ok){
+        // embalagem comprada (lote ativo) traz r.mensagem + r.loteProducao;
+        // pallet dos plásticos traz r.descricao + r.qtd.
+        var msg = r.mensagem ? r.mensagem
+                 : ('✔ '+(r.descricao||'')+' · '+(r.qtd||0)+' un · pallet '+(r.cc||cod));
+        setStatus(msg,'ok');
+        var resumo = r.mensagem
+          ? ((r.descricao||'')+(r.loteProducao?(' · prod '+r.loteProducao):'')+(r.cc?(' · lote '+r.cc):''))
+          : ((r.descricao||'')+' · '+(r.qtd||0)+' un');
+        historico.unshift({t:new Date(), txt:resumo, cc:r.cc||cod, ok:true});
+      }else{
+        setStatus('🚨 '+((r&&r.erro)||'falha'),'erro');
+        historico.unshift({t:new Date(), txt:((r&&r.erro)||'falha'), cc:cod, ok:false});
+      }
+    }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+    renderHist(); focoQR();
+  }
+
+  function renderHist(){
+    var box=document.getElementById('hist');
+    if(!historico.length){ box.innerHTML='<div style="color:#aaa;padding:6px">(nenhuma ainda)</div>'; return; }
+    box.innerHTML='';
+    historico.slice(0,12).forEach(function(h){
+      var hh=('0'+h.t.getHours()).slice(-2)+':'+('0'+h.t.getMinutes()).slice(-2);
+      box.innerHTML+='<div class="hist"><span><span class="pill '+(h.ok?'g':'r')+'">'+(h.ok?'OK':'ERRO')+'</span> '+h.txt+'</span><span style="color:#999;font-family:monospace">'+h.cc+' · '+hh+'</span></div>';
+    });
+  }
+
+  /* ===== rastreio por lote ===== */
+  async function consultarLote(){
+    var lote=limparCodigo(val('rastLote'));
+    var st=document.getElementById('rastStatus'), res=document.getElementById('rastResult');
+    res.innerHTML='';
+    if(!apiUrl()){ st.style.display='block'; st.className='status erro'; st.textContent='Configure a URL da API primeiro.'; return; }
+    if(!lote){ st.style.display='block'; st.className='status erro'; st.textContent='Informe um lote.'; return; }
+    st.style.display='block'; st.className='status info'; st.textContent='Consultando '+lote+'…';
+    try{
+      var r=await getAPI('?acaoemb=consumolote&lote='+encodeURIComponent(lote));
+      if(!(r && r.ok)){ st.className='status erro'; st.textContent='🚨 '+((r&&r.erro)||'falha'); return; }
+      if(!r.total){ st.className='status info'; st.textContent='Nenhum consumo encontrado para o lote '+lote+'.'; return; }
+      st.style.display='none';
+      var h='<div class="status ok" style="margin-top:4px">Lote <b>'+esc(lote)+'</b> · total consumido: <b>'+r.total+'</b> un</div>';
+      if(r.porLinha && r.porLinha.length){
+        h+='<div style="margin-top:8px;font-weight:bold;font-size:12px;color:#555">Por linha</div>';
+        r.porLinha.forEach(function(x){ h+='<div class="hist"><span>'+esc(x.chave||'(sem linha)')+'</span><span style="font-family:monospace">'+x.qtd+' un</span></div>'; });
+      }
+      if(r.porProducao && r.porProducao.length){
+        h+='<div style="margin-top:8px;font-weight:bold;font-size:12px;color:#555">Por lote de produção</div>';
+        r.porProducao.forEach(function(x){ h+='<div class="hist"><span>'+esc(x.chave||'(sem lote)')+'</span><span style="font-family:monospace">'+x.qtd+' un</span></div>'; });
+      }
+      document.getElementById('rastResult').innerHTML=h;
+    }catch(e){ st.className='status erro'; st.textContent='Erro de conexão: '+e; }
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  /* ===== câmera (celular) ===== */
+  async function abrirCamera(){
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(typeof Html5Qrcode==='undefined'){ setStatus('Leitor de câmera não carregou (sem internet).','erro'); return; }
+    if(qrScanner) return;
+    document.getElementById('reader').style.display='block';
+    document.getElementById('btnParar').style.display='block';
+    document.getElementById('btnCam').disabled=true;
+    try{
+      qrScanner=new Html5Qrcode('reader');
+      await qrScanner.start({facingMode:'environment'},{fps:10,qrbox:240},
+        function(txt){ document.getElementById('qr').value=limparCodigo(txt); pararCamera(); biparAgora(); },
+        function(){});
+    }catch(e){ setStatus('Não consegui abrir a câmera: '+e+'. Use https e permita a câmera.','erro'); pararCamera(); }
+  }
+  async function pararCamera(){
+    document.getElementById('btnParar').style.display='none';
+    document.getElementById('btnCam').disabled=false;
+    if(qrScanner){ try{ await qrScanner.stop(); await qrScanner.clear(); }catch(e){} qrScanner=null; }
+    document.getElementById('reader').style.display='none';
+    focoQR();
+  }
+</script>
+</body>
+</html>
