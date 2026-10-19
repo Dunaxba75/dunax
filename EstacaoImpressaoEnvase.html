@@ -96,7 +96,7 @@
   <!-- AJUSTE DA ZEBRA (escuridão e velocidade, gravados na memória da impressora) -->
   <div class="config" id="boxAjuste">
     <h3>🎚 Ajuste da Zebra desta estação</h3>
-    <div class="linha" style="grid-template-columns:1fr 1fr 2fr;">
+    <div class="linha" style="grid-template-columns:1fr 1fr 1fr 1fr 2fr;">
       <div>
         <label>Escuridão (0 a 30)</label>
         <div class="passo">
@@ -116,13 +116,33 @@
         <div class="dica">Menor = mais lento e mais escuro. Maior = mais rápido e mais claro.</div>
       </div>
       <div>
+        <label>Posição ↕ altura (+ sobe / − desce)</label>
+        <div class="passo">
+          <button onclick="passo('ajDx',-8,-400,400)">−</button>
+          <input id="ajDx" type="number" step="8">
+          <button onclick="passo('ajDx',8,-400,400)">+</button>
+        </div>
+        <div class="dica">Em pontos: 8 = 1 mm. Cada clique move 1 mm.</div>
+      </div>
+      <div>
+        <label>Posição ↔ horizontal (+ direita / − esquerda)</label>
+        <div class="passo">
+          <button onclick="passo('ajDy',-8,-400,400)">−</button>
+          <input id="ajDy" type="number" step="8">
+          <button onclick="passo('ajDy',8,-400,400)">+</button>
+        </div>
+        <div class="dica">Vale para pallet e tambor, só nesta estação.</div>
+      </div>
+      <div>
         <label>Como usar</label>
-        <div class="dica" style="font-size:12.5px;">Ajuste os valores, clique em <b>GRAVAR NA ZEBRA</b> e depois em <b>TESTE ZEBRA</b> para conferir.
-          O ajuste fica gravado na impressora e vale para pallet e tambor. Cada estação guarda os seus valores.</div>
+        <div class="dica" style="font-size:12.5px;"><b>Escuridão/velocidade:</b> ajuste e clique em GRAVAR ESCURIDÃO (fica na impressora).<br>
+          <b>Posição:</b> ajuste e clique em SALVAR POSIÇÃO, depois em TESTE PALLET para conferir.<br>Cada estação guarda os seus valores.</div>
       </div>
     </div>
     <div class="acoes">
-      <button onclick="ajustarEscuridao()">💾 GRAVAR NA ZEBRA</button>
+      <button onclick="ajustarEscuridao()">💾 GRAVAR ESCURIDÃO NA ZEBRA</button>
+      <button onclick="salvarPosicao()">💾 SALVAR POSIÇÃO</button>
+      <button style="background:#e67e22;" onclick="testePallet()">🧪 TESTE PALLET</button>
       <button style="background:#e67e22;" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
       <button class="cinza" onclick="document.getElementById('boxAjuste').style.display='none'">FECHAR</button>
     </div>
@@ -303,78 +323,153 @@ function procurarZebra() {
   return tentarPorta();
 }
 
+// Envia já com o ajuste de posição desta estação (botão 🎚 AJUSTAR)
+function enviarZebraAjustado(zpl) {
+  var a = lerAjuste();
+  return enviarZebra(deslocarZPL(zpl, a.dx, a.dy));
+}
+
 function enviarZebra(zpl) {
   if (!zebra) return Promise.reject(new Error('Zebra não encontrada pelo Browser Print'));
   return bpRequisicao('POST', '/write', JSON.stringify({ device: zebra, data: zpl }));
 }
 
 /* ========================= MOLDES DAS ETIQUETAS ====================== */
-// Etiqueta do pallet (mesmo molde do server.js; ^CI28 para sair com acento)
+// ======================================================================
+// MOLDES — copiados do server.js que estava funcionando no PC da produção
+// (só trocada a forma de escrever: linhas em lista, no padrão ES5)
+// ======================================================================
+
+// Etiqueta do pallet (server.js /imprimir, modo ZEBRA). ^CI28 acrescentado para acentos.
 function zplPallet(d) {
   var desc = String(d.descricao || '').replace(/Dulub\s*/i, '').trim();
   var palavras = desc.split(' ');
   var meio = Math.ceil(palavras.length / 2);
   var linha1 = zplLimpo(palavras.slice(0, meio).join(' '));
   var linha2 = zplLimpo(palavras.slice(meio).join(' '));
-
-  return '^XA^CI28\n' +
-    '^PW840\n^LL1616\n' +
-    '^FO646,114^A0R,145,145^FD' + linha1 + '^FS\n' +
-    '^FO510,114^A0R,145,145^FD' + linha2 + '^FS\n' +
-    '^FO250,90^A0R,40,40^FDDATA DE FABRICACAO: ' + zplLimpo(d.data_fab) + '^FS\n' +
-    '^FO180,90^A0R,40,40^FDHORA DE FABRICACAO: ' + zplLimpo(d.hora_fab) + '^FS\n' +
-    '^FO110,90^A0R,40,40^FDLINHA DE ENVASE: ' + zplLimpo(d.linha_envase) + '^FS\n' +
-    '^FO40,90^A0R,40,40^FDUNIDADE DE FABRICACAO: DUNAX BAHIA^FS\n' +
-    '^FO440,950^A0R,60,60^FDLOTE: ' + zplLimpo(d.lote) + '^FS\n' +
-    '^FO360,950^A0R,60,60^FDQTD CAIXAS: ' + zplLimpo(d.qtd) + '^FS\n' +
-    '^FO240,950^A0R,110,110^FDCOD: ' + zplLimpo(d.cod_prod) + '^FS\n' +
-    '^FO40,1400^BQN,2,7^FDQA,' + zplLimpo(d.qr_code_pallet) + '^FS\n' +
-    '^XZ\n';
+  return [
+    '^XA',
+    '^CI28',
+    '^PW840',
+    '^LL1616',
+    '^FO646,114^A0R,120,120^FD' + linha1 + '^FS',
+    '^FO510,114^A0R,120,120^FD' + linha2 + '^FS',
+    '^FO250,90^A0R,40,40^FDDATA DE FABRICACAO: ' + zplLimpo(d.data_fab) + '^FS',
+    '^FO180,90^A0R,40,40^FDHORA DE FABRICACAO: ' + zplLimpo(d.hora_fab) + '^FS',
+    '^FO110,90^A0R,40,40^FDLINHA DE ENVASE: ' + zplLimpo(d.linha_envase) + '^FS',
+    '^FO40,90^A0R,40,40^FDUNIDADE DE FABRICACAO: DUNAX BAHIA^FS',
+    '^FO440,950^A0R,60,60^FDLOTE: ' + zplLimpo(d.lote) + '^FS',
+    '^FO360,950^A0R,60,60^FDQTD CAIXAS: ' + zplLimpo(d.qtd) + '^FS',
+    '^FO240,950^A0R,110,110^FDCOD: ' + zplLimpo(d.cod_prod) + '^FS',
+    '^FO60,1150^BQN,2,7^FDQA,' + zplLimpo(d.qr_code_pallet) + '^FS',
+    '^XZ'
+  ].join('\n') + '\n';
 }
 
-// Etiquetas do tambor 200L (mesmo molde do server.js)
-function zplTambor(d) {
+// Tambor 200L — TOPO da tampa (831 x 1582 pontos = 104 x 198 mm)
+function zplTopoTambor(d, horaAgoraTxt) {
   function v(x) { return zplLimpo(x); }
-  // sem ~SD/^PR/^JUS: assim vale a escuridão gravada na impressora (botão AJUSTAR ESCURIDÃO)
-  return '^XA\n~TA000\n~JSN\n^LT0\n^MNW\n^MTT\n^PON\n^PMN\n^LH0,0\n^JMA\n^LRN\n^CI28\n^PA0,1,1,0\n' +
-    '^MMT\n^PW831\n^LL1638\n^LS0\n' +
-    '^FT347,1175^A0R,61,89^FH\\^FDL:^FS\n' +
-    '^FT354,72^A0R,62,61^FH\\^FDP. BRUTO (kg):^FS\n' +
-    '^FO648,24^GB181,1582,8^FS\n' +
-    '^FT668,1157^A0R,39,41^FH\\^FDCOD. PROD:^FS\n' +
-    '^FT346,688^A0R,62,61^FH\\^FDP. LIQ(kg):^FS\n' +
-    '^FT263,0^A0R,40,40^FH\\^FDCOMPOSIÇÃO:^FS\n' +
-    '^FT123,0^A0R,40,40^FH\\^FDAPLICAÇÃO:^FS\n' +
-    '^FT668,0^A0R,39,41^FB141,1,10,R^FH\\^FDANP:^FS\n' +
-    '^FT560,269^A0R,61,66^FH\\^FDFAB:^FS\n' +
-    '^FT466,808^A0R,59,51^FH\\^FDNº SEQ:^FS\n' +
-    '^FT567,830^A0R,62,63^FH\\^FD' + v(d.hora) + '^FS\n' +
-    '^FO319,650^GB103,501,7^FS\n' +
-    '^FO319,23^GB103,634,7^FS\n' +
-    '^FO319,1143^GB103,463,7^FS\n' +
-    '^FT670,159^A0R,45,46^FH\\^FD' + v(d.anp) + '^FS\n' +
-    '^FT481,271^A0R,61,66^FH\\^FDVAL:^FS\n' +
-    '^FO421,741^GB232,0,8^FS\n' +
-    '^FO30,24^GB623,1582,8^FS\n' +
-    '^FT347,1344^A0R,61,89^FH\\^FD' + v(d.lote) + '^FS\n' +
-    '^BY3,3,138^FT467,1178^BCR,,Y,N^FH\\^FD>;' + v(d.ean13) + '^FS\n' +
-    '^FT263,300^A0R,35,22^FH\\^FD' + v(d.comp1) + '^FS\n' +
-    '^FT228,300^A0R,35,22^FH\\^FD' + v(d.comp2) + '^FS\n' +
-    '^FT193,300^A0R,35,22^FH\\^FD' + v(d.comp3) + '^FS\n' +
-    '^FT158,300^A0R,35,22^FH\\^FD' + v(d.comp4) + '^FS\n' +
-    '^FT123,300^A0R,35,22^FH\\^FD' + v(d.aplic1) + '^FS\n' +
-    '^FT88,300^A0R,35,22^FH\\^FD' + v(d.aplic2) + '^FS\n' +
-    '^FT53,300^A0R,35,22^FH\\^FD' + v(d.aplic3) + '^FS\n' +
-    '^FT18,300^A0R,35,22^FH\\^FD' + v(d.aplic4) + '^FS\n' +
-    '^FT349,463^A0R,62,66^FH\\^FD' + v(d.pbruto) + '^FS\n' +
-    '^FT349,969^A0R,62,61^FH\\^FD' + v(d.pliq) + '^FS\n' +
-    '^FO420,20^BQN,2,7^FDQA,' + v(d.qr) + '^FS\n' +
-    '^FT562,394^A0R,59,71^FH\\^FD' + v(d.data_fab) + '^FS\n' +
-    '^FT466,992^A0R,59,51^FH\\^FD' + v(d.seq) + '^FS\n' +
-    '^FT714,49^A0R,78,76^FH\\^FD' + v(d.produto) + '^FS\n' +
-    '^FT668,1378^A0R,39,41^FH\\^FD' + v(d.codigo) + '^FS\n' +
-    '^FT483,392^A0R,59,71^FH\\^FD' + v(d.validade) + '^FS\n' +
-    '^PQ1,0,1,Y\n^XZ\n';
+  var zplEan = d.ean13 ? '^BY3,3,130^FT470,1180^BCR,,Y,N^FH\\^FD>;' + v(d.ean13) + '^FS' : '';
+  var loteCompleto = 'DB' + String(d.lote || '').toUpperCase().replace(/^DB/, '');
+  var comp34 = [d.comp3, d.comp4].filter(Boolean).join(' ');
+  return [
+    '^XA',
+    '^CI28',
+    '^PW831',
+    '^LL1582',
+    '^LH0,0',
+    // grade / moldura
+    '^FO30,24^GB799,1532,6^FS',
+    '^FO660,24^GB6,1532,6^FS',
+    '^FO422,24^GB6,1532,6^FS',
+    '^FO290,24^GB6,1532,6^FS',
+    '^FO425,760^GB238,0,6^FS',
+    '^FO425,1130^GB238,0,6^FS',
+    '^FO290,620^GB132,0,6^FS',
+    '^FO290,1130^GB132,0,6^FS',
+    // cabeçalho
+    '^FT745,45^A0R,70,68^FH\\^FD' + v(d.produto) + '^FS',
+    '^FT675,45^A0R,34,34^FH\\^FDANP: ' + v(d.anp) + '^FS',
+    '^FT675,1180^A0R,34,34^FH\\^FDCOD. PROD: ' + v(d.codigo) + '^FS',
+    // QR / datas / hora / sequencial
+    '^FO470,0^BQN,2,7^FDMA,' + v(d.qr) + '^FS',
+    '^FT562,310^A0R,60,60^FH\\^FDFAB: ' + v(d.data_fab) + '^FS',
+    '^FT483,310^A0R,60,60^FH\\^FDVAL: ' + v(d.validade) + '^FS',
+    '^FT565,800^A0R,60,52^FH\\^FD' + v(d.hora || horaAgoraTxt) + '^FS',
+    '^FT470,800^A0R,52,48^FH\\^FDNº SEQ: ' + v(d.seq) + '^FS',
+    zplEan,
+    // pesos e lote
+    '^FT350,45^A0R,56,48^FH\\^FDP. BRUTO (kg): ' + v(d.pbruto) + '^FS',
+    '^FT350,640^A0R,56,48^FH\\^FDP. LIQ(kg): ' + v(d.pliq) + '^FS',
+    '^FT350,1150^A0R,60,56^FH\\^FDL:' + v(loteCompleto) + '^FS',
+    // composição
+    '^FT250,45^A0R,34,34^FH\\^FDCOMPOSIÇÃO:^FS',
+    '^FT250,265^A0R,30,26^FH\\^FD' + v(d.comp1 || 'Nao cadastrada na planilha') + '^FS',
+    '^FT218,45^A0R,30,26^FH\\^FD' + v(d.comp2) + '^FS',
+    '^FT188,45^A0R,30,26^FH\\^FD' + v(comp34) + '^FS',
+    // aplicação
+    '^FT150,45^A0R,34,34^FH\\^FDAPLICAÇÃO:^FS',
+    '^FT122,45^A0R,28,26^FH\\^FD' + v(d.aplic1 || 'Nao cadastrada na planilha') + '^FS',
+    '^FT94,45^A0R,28,26^FH\\^FD' + v(d.aplic2) + '^FS',
+    '^FT66,45^A0R,28,26^FH\\^FD' + v(d.aplic3) + '^FS',
+    '^FT38,45^A0R,28,26^FH\\^FD' + v(d.aplic4) + '^FS',
+    '^XZ'
+  ].join('\n') + '\n';
+}
+
+// Tambor 200L — LATERAL do corpo (831 x 783 pontos = 104 x 98 mm). Texto girado 180° (^A0I)
+function zplLateralTambor(d) {
+  function v(x) { return zplLimpo(x); }
+  var loteCompleto = 'DB' + String(d.lote || '').toUpperCase().replace(/^DB/, '');
+  return [
+    '^XA',
+    '^CI28',
+    '^PW831',
+    '^LL783',
+    '^LH0,0',
+    // grade / moldura
+    '^FO49,24^GB747,579,8^FS',
+    '^FO49,593^GB747,110,8^FS',
+    '^FO361,24^GB435,579,8^FS',
+    '^FO49,180^GB319,103,8^FS',
+    '^FO49,499^GB319,104,8^FS',
+    '^FO351,180^GB445,0,8^FS',
+    '^FO253,505^GB0,98,8^FS',
+    // produto e código
+    '^FT786,629^A0I,65,38^FH\\^FD' + v(d.produto) + '^FS',
+    '^FT774,82^A0I,51,51^FH\\^FDCOD. PROD:^FS',
+    '^FT509,85^A0I,62,55^FH\\^FD' + v(d.codigo) + '^FS',
+    // QR
+    '^FO442,160^BQN,2,10^FDMA,' + v(d.qr) + '^FS',
+    // datas
+    '^FT350,406^A0I,62,53^FH\\^FDFAB:^FS',
+    '^FT241,406^A0I,62,41^FH\\^FD' + v(d.data_fab) + '^FS',
+    '^FT350,323^A0I,62,51^FH\\^FDVAL:^FS',
+    '^FT241,323^A0I,62,41^FH\\^FD' + v(d.validade) + '^FS',
+    // lote e sequencial
+    '^FT250,206^A0I,70,41^FH\\^FDLOTE:^FS',
+    '^FT280,83^A0I,70,41^FH\\^FD' + v(loteCompleto) + '^FS',
+    '^FT340,523^A0I,70,41^FH\\^FDSEQ:^FS',
+    '^FT169,533^A0I,60,41^FH\\^FD' + v(d.seq) + '^FS',
+    '^XZ'
+  ].join('\n') + '\n';
+}
+
+// Escolhe o molde de cada etiqueta do lote (TOPO se não vier nada)
+function zplTambor(d, layoutGeral) {
+  var lay = String(d.layout || layoutGeral || 'TOPO').toUpperCase();
+  var hora = doisDig(new Date().getHours()) + ':' + doisDig(new Date().getMinutes());
+  return lay === 'LATERAL' ? zplLateralTambor(d) : zplTopoTambor(d, hora);
+}
+
+// Ajuste fino de POSIÇÃO desta estação: soma nas coordenadas de todos os ^FO / ^FT.
+//   dx (x) = altura na etiqueta  → + SOBE   / − desce      (8 pontos = 1 mm)
+//   dy (y) = horizontal          → + DIREITA / − esquerda
+function deslocarZPL(zpl, dx, dy) {
+  if (!dx && !dy) return zpl;
+  return zpl.replace(/\^(FO|FT)(-?\d+),(-?\d+)/g, function (m, cmd, x, y) {
+    return '^' + cmd + Math.max(0, parseInt(x, 10) + dx) + ',' + Math.max(0, parseInt(y, 10) + dy);
+  });
 }
 
 // Folha A4 deitada (mesmo layout do server.js)
@@ -453,18 +548,14 @@ function imprimirItem(item) {
   if (tipo !== 'LASER' && !zebra) {
     return marcar(item, 'LIBERAR', '');
   }
-  if (tipo === 'TAMBOR' && String(d.layout || 'TOPO').toUpperCase() === 'LATERAL') {
-    registrarLog('FALHA', 'Tambor LATERAL — molde ainda não configurado na estação');
-    return marcar(item, 'FALHA', 'Layout LATERAL ainda não configurado na estação');
-  }
   if (tipo === 'LASER') p = imprimirLaser(d);
   else if (tipo === 'TAMBOR') {
     var lista = d.etiquetas || [];
     var zpl = '';
-    for (var i = 0; i < lista.length; i++) zpl += zplTambor(lista[i]);
-    p = zpl ? enviarZebra(zpl) : Promise.reject(new Error('Nenhuma etiqueta de tambor recebida'));
+    for (var i = 0; i < lista.length; i++) zpl += zplTambor(lista[i], d.layout);
+    p = zpl ? enviarZebraAjustado(zpl) : Promise.reject(new Error('Nenhuma etiqueta de tambor recebida'));
   }
-  else p = enviarZebra(zplPallet(d));
+  else p = enviarZebraAjustado(zplPallet(d));
 
   var resumo = tipo + ' · ' + (d.lote || (d.etiquetas && d.etiquetas[0] && d.etiquetas[0].lote) || '') + ' · ' + (d.descricao || '');
   return p.then(function () {
@@ -538,13 +629,16 @@ function testeZebra() {
 // Os valores ficam salvos neste PC (cada estação/Zebra tem os seus).
 function lerAjuste() {
   var e = parseInt(lerLocal('est_escuridao'), 10), v = parseInt(lerLocal('est_velocidade'), 10);
-  return { esc: isNaN(e) ? ESCURIDAO : e, vel: isNaN(v) ? VELOCIDADE : v };
+  var x = parseInt(lerLocal('est_dx'), 10), y = parseInt(lerLocal('est_dy'), 10);
+  return { esc: isNaN(e) ? ESCURIDAO : e, vel: isNaN(v) ? VELOCIDADE : v, dx: isNaN(x) ? 0 : x, dy: isNaN(y) ? 0 : y };
 }
 
 function mostrarAjuste() {
   var a = lerAjuste();
   document.getElementById('ajEsc').value = a.esc;
   document.getElementById('ajVel').value = a.vel;
+  document.getElementById('ajDx').value = a.dx;
+  document.getElementById('ajDy').value = a.dy;
   document.getElementById('boxAjuste').style.display = 'block';
 }
 
@@ -552,6 +646,23 @@ function passo(id, delta, min, max) {
   var el = document.getElementById(id);
   var n = (parseInt(el.value, 10) || 0) + delta;
   el.value = Math.max(min, Math.min(max, n));
+}
+
+// Posição: só fica salva neste PC e vale para as próximas etiquetas (não grava na Zebra)
+function salvarPosicao() {
+  var dx = parseInt(document.getElementById('ajDx').value, 10) || 0;
+  var dy = parseInt(document.getElementById('ajDy').value, 10) || 0;
+  if (Math.abs(dx) > 400 || Math.abs(dy) > 400) { alert('Deslocamento muito grande (máximo 400 pontos = 5 cm).'); return; }
+  gravarLocal('est_dx', String(dx)); gravarLocal('est_dy', String(dy));
+  registrarLog('INFO', 'Posição salva: ' + (dx >= 0 ? '+' : '') + dx + ' na altura, ' + (dy >= 0 ? '+' : '') + dy + ' na horizontal');
+}
+
+// Etiqueta de pallet de exemplo, para conferir a posição sem passar pela fila
+function testePallet() {
+  enviarZebraAjustado(zplPallet({ descricao: 'Dulub TESTE DE POSICAO 20L', data_fab: new Date().toLocaleDateString('pt-BR'),
+    hora_fab: horaAgora(), linha_envase: 'TESTE', lote: 'DB0000', qtd: '0', cod_prod: '0000', qr_code_pallet: 'TESTE' }))
+    .then(function () { registrarLog('IMPRESSO', 'Teste de posição — pallet'); })
+    .catch(function (e) { registrarLog('FALHA', 'Teste de posição — ' + e.message); });
 }
 
 function ajustarEscuridao() {
