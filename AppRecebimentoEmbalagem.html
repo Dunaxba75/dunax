@@ -392,52 +392,42 @@ function quebraNome(s){
 function buildZPL(d){
   var tk=token(d), nome=esc(d.material)||' ';
   var z='';
+  // Cabeçalho MÍNIMO, igual ao do teste que imprime perfeito: sem ^MTT/^MNW/~JS/^JUS,
+  // que são a config do Zebra Designer e enrugam/queimam o ribbon. A impressora usa a
+  // própria calibração. ^PR/~SD só entram se o usuário FORÇAR na Configuração.
   var dark=zebraDark(), spd=zebraSpeed(), cfg='';
   if(spd!=='')  cfg+='^PR'+spd+','+spd;
   if(dark!=='') cfg+='~SD'+dark;
   z+='^XA^CI28'+cfg+'\n^PW831\n^LL1614\n^LS0\n';
-
-  // ===== moldura + coluna de identificação (AJUSTADO: QR 30mm e Material 150x20mm) =====
+  // ===== moldura + coluna de identificação (QR 30mm / 240 dots) =====
   z+='^FO8,8^GB815,1598,4^FS\n';
   z+='^FO8,8^GB281,1598,4^FS\n';
-  
-  // QR Code reduzido para caber em 30mm (240 dots) de altura na etiqueta
-  z+='^FO45,22^BQN,2,6^FDMA,'+tk+'^FS\n';     
-  z+='^FO8,248^GB281,0,4^FS\n'; // Divisória movida de 330 para 248 (~30mm de área para o QR)
-  
-  // Legenda à esquerda e ETIQ X/N à direita (afastados para liberar 20mm / 160 dots no centro)
-  z+='^FT44,1585^A0B,30,18^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
-  if(d.seq) z+='^FT276,1585^A0B,42,28^FDETIQ '+esc(d.seq)+'^FS\n';
-
-  // ----- nome do produto: 1 LINHA, ESCALONAMENTO 100% (hm = wm), área útil 150mm x 20mm -----
-  // 150mm = ~1200 dots (podendo usar até 1310 dots se necessário) | 20mm = 160 dots
-  var len = Math.max(1, nome.length);
-  var LMAT = 1310;               // Comprimento máximo (~163mm disponíveis, garante os 150mm com margem)
-  var CY = 926;                  // Novo centro vertical entre a linha do QR (248) e a base (1606)
-  var NAT = 1.0;                 // 1.0 = Escalonamento 100% puro (mesmo valor p/ altura e largura no ^A0)
-  var ADV = 0.42;                // Taxa de avanço horizontal real da fonte ^A0 em proporção 1:1
-  var LLIM = 60;                 // Limite esquerdo (logo após "IDENTIFICAÇÃO DE MATERIAL")
-  var RLIM = (d.seq ? 228 : 276);// Limite direito (reserva 20mm/168 dots mesmo com "ETIQ 2/2")
-  var AW = RLIM - LLIM;          // Largura disponível (~20mm = 168 dots)
-
-  var wm = Math.max(24, Math.min(Math.floor(LMAT / (ADV * len)), Math.floor(AW / NAT), 160));
-  var hm = Math.round(wm * NAT); // Escalonamento 100%: altura = largura
-  var matX = Math.round((LLIM + RLIM) / 2 + hm / 2);
-  var by = Math.min(1590, Math.round(CY + (len * wm * ADV) / 2)); // Centraliza nos 150mm
+  z+='^FO45,22^BQN,2,6^FDMA,'+tk+'^FS\n';     // QR centralizado nos 30mm (mag 6)
+  z+='^FO8,248^GB281,0,4^FS\n';                // Divisória em 248 (~30mm de área p/ QR)
+  z+='^FT42,1580^A0B,34,16^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
+  if(d.seq) z+='^FT282,1585^A0B,48,30^FDETIQ '+esc(d.seq)+'^FS\n';   // desmembramento 1/N
+  // ----- nome do produto: 1 LINHA, fonte em ESCALONAMENTO 100% (proporção natural, nunca achatada),
+  // ocupando até 150mm (1200 dots) x 20mm (160 dots), centralizado na vertical e próximo à margem esquerda -----
+  var len=Math.max(1,nome.length);
+  var LMAT=1250, WMAX=123, CY=927, NAT=1.3, ADV=0.60;        // LMAT=1250 (~156mm); WMAX=123 (hm máx 160 dots = 20mm)
+  var LLIM=50, RLIM=(d.seq?230:285), AW=Math.min(160, RLIM-LLIM);
+  var wm=Math.max(18, Math.min(Math.floor(LMAT/(ADV*len)), Math.floor(AW/NAT), WMAX));
+  var hm=Math.round(wm*NAT);                                  // 100%: altura proporcional à largura (máx 160 dots = 20mm)
+  var matX=Math.round(LLIM + hm*0.85);                        // alinhado próximo à margem esquerda (ao lado da legenda)
+  var compReal=len*wm*ADV;
+  var by=Math.min(1585, Math.max(Math.round(265+compReal), Math.round(CY+compReal/2))); // centralizado sem invadir o QR (248)
   z+='^FT'+matX+','+by+'^A0B,'+hm+','+wm+'^FD'+nome+'^FS\n';
-
-  // ===== banda superior: QTD (maior) + DATA RECEBIMENTO (menor) =====
+  // ===== banda superior: QTD (maior) + DATA RECEBIMENTO (menor) com autoescala p/ não cortar =====
   z+='^FO289,445^GB534,0,4^FS\n';
   z+='^FO585,8^GB0,437,4^FS\n';
   var qv=esc(d.qtd), wQ=Math.max(46,Math.min(100,Math.floor(380/Math.max(1,String(qv).length)))), hQ=Math.round(wQ*1.5);
   var dv=dBR(d.datarec), wDb=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length))));
-  var wD=Math.min(Math.round(wDb*1.15), Math.floor(428/Math.max(1,String(dv).length))), hD=Math.round(wD*1.45);
+  var wD=Math.min(Math.round(wDb*1.15), Math.floor(428/Math.max(1,String(dv).length))), hD=Math.round(wD*1.45);  // +15%, limitado p/ não cortar
   z+='^FT345,436^A0B,40,24^FDQTD^FS\n';
   z+='^FT'+Math.round(437+hQ/2)+',436^A0B,'+hQ+','+wQ+'^FD'+qv+'^FS\n';
   z+='^FT800,436^A0B,40,22^FDDATA RECEBIMENTO^FS\n';
   z+='^FT'+Math.round(650+hD/2)+',436^A0B,'+hD+','+wD+'^FD'+dv+'^FS\n';
-
-  // ===== grade de campos: 4 colunas x 2 linhas =====
+  // ===== grade de campos: 4 colunas x 2 linhas, tudo fechado =====
   var gx=[289,422,554,686,819];
   for(var c=0;c<gx.length;c++) z+='^FO'+gx[c]+',445^GB0,1161,4^FS\n';
   z+='^FO289,1026^GB534,0,4^FS\n';
@@ -484,13 +474,7 @@ function zplToSVG(zpl){
     var mA=f.match(/\^A0B,(\d+),(\d+)/); var hh=mA?+mA[1]:30, ww=mA?+mA[2]:Math.round(hh*0.66);
     var txt=svgEsc(mFD[1]);
     var anchor=/\^FB\d+,1,0,R/.test(f) ? ' text-anchor="end"' : '';
-    // a fonte do navegador é mais larga que a da Zebra: reduz um pouco para o
-    // texto não sobrepor e aproximar o comprimento do print. Além disso, condensa
-    // conforme a largura (w) do ZPL — fontes estreitas (nome grande em 1 linha) saem
-    // estreitas também, igual à impressão. Para fontes normais sx=1 (não muda nada).
     var fs=Math.round(hh*0.76);
-    // comprimento real impresso ≈ nº de caracteres × largura × ADV (fonte Zebra ^A0 é estreita).
-    // Força o texto da prévia a esse comprimento p/ bater com a impressão.
     var nchars=(mFD[1]||'').length, tl=Math.max(1, Math.round(nchars*ww*0.60));
     out+='<text font-size="'+fs+'" font-family="Arial, Helvetica, sans-serif" textLength="'+tl+'" lengthAdjust="spacingAndGlyphs"'+anchor
        +' transform="translate('+x+' '+y+') rotate(-90)">'+txt+'</text>';
