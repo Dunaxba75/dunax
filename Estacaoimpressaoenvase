@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DULUB | Estação de Impressão do Envase</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background:#f0f2f5; margin:0; color:#333; }
+  .header { background:#2c3e50; color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; }
+  .header .t { font-weight:bold; font-size:18px; letter-spacing:1px; }
+  .header .h { font-size:13px; opacity:.85; }
+  .wrap { max-width:900px; margin:0 auto; padding:16px; }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+  .card { background:#fff; border-radius:10px; padding:14px; box-shadow:0 2px 4px rgba(0,0,0,.08); border-left:7px solid #95a5a6; }
+  .card.ok { border-left-color:#27ae60; } .card.erro { border-left-color:#c0392b; } .card.aviso { border-left-color:#e67e22; }
+  .card .r { font-size:11px; font-weight:bold; color:#7f8c8d; text-transform:uppercase; }
+  .card .v { font-size:16px; font-weight:bold; margin-top:6px; word-break:break-word; }
+  .card .s { font-size:12px; color:#7f8c8d; margin-top:4px; }
+  .botoes { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .botoes button { padding:11px 16px; border:none; border-radius:8px; font-weight:bold; font-size:14px; cursor:pointer; color:#fff; background:#2980b9; }
+  .botoes .cinza { background:#7f8c8d; } .botoes .verde { background:#27ae60; } .botoes .laranja { background:#e67e22; }
+  .log { background:#fff; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); overflow:hidden; }
+  .log .tit { background:#ecf0f1; padding:10px 14px; font-weight:bold; font-size:13px; color:#2c3e50; }
+  .log table { width:100%; border-collapse:collapse; font-size:13px; }
+  .log td { padding:8px 14px; border-top:1px solid #eef0f2; vertical-align:top; }
+  .log td.hora { color:#7f8c8d; white-space:nowrap; width:70px; }
+  .log td.st { font-weight:bold; white-space:nowrap; width:110px; }
+  .st.IMPRESSO { color:#27ae60; } .st.FALHA { color:#c0392b; } .st.INFO { color:#2980b9; }
+  #areaLaser { position:absolute; left:-10000px; top:0; width:10px; height:10px; border:0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE</div>
+  <div class="h" id="relogio">--:--:--</div>
+</div>
+
+<div class="wrap">
+  <div class="cards">
+    <div class="card" id="cardZebra"><div class="r">Zebra (Browser Print)</div><div class="v" id="txtZebra">Procurando...</div><div class="s" id="subZebra"></div></div>
+    <div class="card" id="cardFila"><div class="r">Fila do sistema</div><div class="v" id="txtFila">Aguardando...</div><div class="s" id="subFila"></div></div>
+    <div class="card ok" id="cardLaser"><div class="r">Laser (impressora padrão)</div><div class="v">Pelo Chrome</div><div class="s">Abra esta página pelo atalho com --kiosk-printing</div></div>
+  </div>
+
+  <div class="botoes">
+    <button class="verde" id="btnPausa" onclick="alternarPausa()">⏸ PAUSAR</button>
+    <button onclick="verificarFila()">↻ VERIFICAR AGORA</button>
+    <button class="cinza" onclick="procurarZebra()">🔍 PROCURAR ZEBRA</button>
+    <button class="laranja" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
+    <button class="laranja" onclick="testeLaser()">🧪 TESTE LASER</button>
+    <button class="cinza" onclick="ajustarEscuridao()">🎚 AJUSTAR ESCURIDÃO</button>
+  </div>
+
+  <div class="log">
+    <div class="tit">Últimas impressões</div>
+    <table><tbody id="corpoLog"></tbody></table>
+  </div>
+</div>
+
+<iframe id="areaLaser"></iframe>
+
+<script>
+/* =====================================================================
+ *  ESTAÇÃO DE IMPRESSÃO DO ENVASE — substitui o server.js + ngrok
+ *  Fica aberta no PC da produção. A cada INTERVALO_MS consulta a fila no
+ *  Apps Script, imprime cada item e devolve o status (vai para a coluna M).
+ *    ZEBRA  -> etiqueta do pallet, pelo Zebra Browser Print
+ *    TAMBOR -> lote de etiquetas do tambor 200L, pelo Zebra Browser Print
+ *    LASER  -> folha A4 deitada, pelo Chrome (--kiosk-printing = sem janela)
+ * ===================================================================== */
+
+/* ------------------------- CONFIGURAÇÃO ------------------------------ */
+// URL da implantação do Apps Script da planilha App_Validador_QR_Caixas (termina em /exec)
+var URL_API = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT/exec';
+var INTERVALO_MS = 10000;                   // consulta a fila a cada 10 s
+var NOME_ZEBRA_PREFERIDA = '';              // vazio = usa a Zebra padrão do Browser Print
+var ESCURIDAO = 27;                         // 0 a 30 (mais alto = mais escuro) — igual ao AJUSTE IMPRESSORA.BAT
+var VELOCIDADE = 2;                         // 2 a 6 (mais baixo = mais escuro)
+/* --------------------------------------------------------------------- */
+
+var BP_PORTAS = ['https://127.0.0.1:9101', 'http://127.0.0.1:9100'];
+var bpBase = null;          // porta do Browser Print que respondeu
+var zebra = null;           // dispositivo Zebra escolhido
+var pausado = false;
+var ocupado = false;
+
+/* ============================ UTILITÁRIOS ============================ */
+function doisDig(n) { return ('0' + n).slice(-2); }
+function horaAgora() { var d = new Date(); return doisDig(d.getHours()) + ':' + doisDig(d.getMinutes()) + ':' + doisDig(d.getSeconds()); }
+setInterval(function () { document.getElementById('relogio').innerText = horaAgora(); }, 1000);
+
+function registrarLog(status, texto) {
+  var corpo = document.getElementById('corpoLog');
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td class="hora">' + horaAgora() + '</td><td class="st ' + status + '">' + status + '</td><td></td>';
+  tr.cells[2].innerText = texto;
+  corpo.insertBefore(tr, corpo.firstChild);
+  while (corpo.rows.length > 60) corpo.deleteRow(corpo.rows.length - 1);
+}
+
+function pintarCard(id, classe) {
+  var c = document.getElementById(id);
+  c.className = 'card ' + classe;
+}
+
+// Tira os caracteres de comando do ZPL (^ e ~) dos dados variáveis
+function zplLimpo(v) {
+  return String(v === undefined || v === null ? '' : v).replace(/[\^~]/g, ' ');
+}
+
+function escHtml(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ======================== ZEBRA BROWSER PRINT ======================== */
+// O Browser Print aceita texto simples (sem preflight de CORS)
+function bpRequisicao(metodo, caminho, corpo) {
+  return fetch(bpBase + caminho, {
+    method: metodo,
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    body: corpo === undefined ? undefined : corpo
+  }).then(function (r) {
+    if (!r.ok) throw new Error('Browser Print respondeu ' + r.status);
+    return r.text();
+  });
+}
+
+function procurarZebra() {
+  document.getElementById('txtZebra').innerText = 'Procurando...';
+  pintarCard('cardZebra', 'aviso');
+  bpBase = null; zebra = null;
+
+  var i = 0;
+  function tentarPorta() {
+    if (i >= BP_PORTAS.length) {
+      document.getElementById('txtZebra').innerText = 'Browser Print não encontrado';
+      document.getElementById('subZebra').innerText = 'Verifique se o Zebra Browser Print está aberto (ícone perto do relógio). Se for a 1ª vez, abra https://127.0.0.1:9101/ssl_support e aceite o certificado.';
+      pintarCard('cardZebra', 'erro');
+      return Promise.resolve(false);
+    }
+    var porta = BP_PORTAS[i++];
+    return fetch(porta + '/available').then(function (r) {
+      if (!r.ok) throw new Error();
+      bpBase = porta;
+      return r.json();
+    }).then(function (lista) {
+      var impressoras = (lista && lista.printer) ? lista.printer : [];
+      if (NOME_ZEBRA_PREFERIDA) {
+        for (var k = 0; k < impressoras.length; k++) {
+          if (impressoras[k].name === NOME_ZEBRA_PREFERIDA) zebra = impressoras[k];
+        }
+      }
+      if (zebra) return zebra;
+      return bpRequisicao('GET', '/default?type=printer').then(function (t) {
+        try { zebra = JSON.parse(t); } catch (e) { zebra = null; }
+        if ((!zebra || !zebra.name) && impressoras.length) zebra = impressoras[0];
+        return zebra;
+      });
+    }).then(function (dev) {
+      if (!dev || !dev.name) {
+        document.getElementById('txtZebra').innerText = 'Nenhuma Zebra configurada';
+        document.getElementById('subZebra').innerText = 'No ícone do Browser Print > Settings, escolha a impressora padrão.';
+        pintarCard('cardZebra', 'erro');
+        return false;
+      }
+      document.getElementById('txtZebra').innerText = dev.name;
+      document.getElementById('subZebra').innerText = (dev.connection || '') + ' · ' + bpBase.replace('https://', '').replace('http://', '');
+      pintarCard('cardZebra', 'ok');
+      return true;
+    }).catch(function () { return tentarPorta(); });
+  }
+  return tentarPorta();
+}
+
+function enviarZebra(zpl) {
+  if (!zebra) return Promise.reject(new Error('Zebra não encontrada pelo Browser Print'));
+  return bpRequisicao('POST', '/write', JSON.stringify({ device: zebra, data: zpl }));
+}
+
+/* ========================= MOLDES DAS ETIQUETAS ====================== */
+// Etiqueta do pallet (mesmo molde do server.js; ^CI28 para sair com acento)
+function zplPallet(d) {
+  var desc = String(d.descricao || '').replace(/Dulub\s*/i, '').trim();
+  var palavras = desc.split(' ');
+  var meio = Math.ceil(palavras.length / 2);
+  var linha1 = zplLimpo(palavras.slice(0, meio).join(' '));
+  var linha2 = zplLimpo(palavras.slice(meio).join(' '));
+
+  return '^XA^CI28\n' +
+    '^PW840\n^LL1616\n' +
+    '^FO646,114^A0R,145,145^FD' + linha1 + '^FS\n' +
+    '^FO510,114^A0R,145,145^FD' + linha2 + '^FS\n' +
+    '^FO250,90^A0R,40,40^FDDATA DE FABRICACAO: ' + zplLimpo(d.data_fab) + '^FS\n' +
+    '^FO180,90^A0R,40,40^FDHORA DE FABRICACAO: ' + zplLimpo(d.hora_fab) + '^FS\n' +
+    '^FO110,90^A0R,40,40^FDLINHA DE ENVASE: ' + zplLimpo(d.linha_envase) + '^FS\n' +
+    '^FO40,90^A0R,40,40^FDUNIDADE DE FABRICACAO: DUNAX BAHIA^FS\n' +
+    '^FO440,950^A0R,60,60^FDLOTE: ' + zplLimpo(d.lote) + '^FS\n' +
+    '^FO360,950^A0R,60,60^FDQTD CAIXAS: ' + zplLimpo(d.qtd) + '^FS\n' +
+    '^FO240,950^A0R,110,110^FDCOD: ' + zplLimpo(d.cod_prod) + '^FS\n' +
+    '^FO40,1400^BQN,2,7^FDQA,' + zplLimpo(d.qr_code_pallet) + '^FS\n' +
+    '^XZ\n';
+}
+
+// Etiquetas do tambor 200L (mesmo molde do server.js)
+function zplTambor(d) {
+  function v(x) { return zplLimpo(x); }
+  // sem ~SD/^PR/^JUS: assim vale a escuridão gravada na impressora (botão AJUSTAR ESCURIDÃO)
+  return '^XA\n~TA000\n~JSN\n^LT0\n^MNW\n^MTT\n^PON\n^PMN\n^LH0,0\n^JMA\n^LRN\n^CI28\n^PA0,1,1,0\n' +
+    '^MMT\n^PW831\n^LL1638\n^LS0\n' +
+    '^FT347,1175^A0R,61,89^FH\\^FDL:^FS\n' +
+    '^FT354,72^A0R,62,61^FH\\^FDP. BRUTO (kg):^FS\n' +
+    '^FO648,24^GB181,1582,8^FS\n' +
+    '^FT668,1157^A0R,39,41^FH\\^FDCOD. PROD:^FS\n' +
+    '^FT346,688^A0R,62,61^FH\\^FDP. LIQ(kg):^FS\n' +
+    '^FT263,0^A0R,40,40^FH\\^FDCOMPOSIÇÃO:^FS\n' +
+    '^FT123,0^A0R,40,40^FH\\^FDAPLICAÇÃO:^FS\n' +
+    '^FT668,0^A0R,39,41^FB141,1,10,R^FH\\^FDANP:^FS\n' +
+    '^FT560,269^A0R,61,66^FH\\^FDFAB:^FS\n' +
+    '^FT466,808^A0R,59,51^FH\\^FDNº SEQ:^FS\n' +
+    '^FT567,830^A0R,62,63^FH\\^FD' + v(d.hora) + '^FS\n' +
+    '^FO319,650^GB103,501,7^FS\n' +
+    '^FO319,23^GB103,634,7^FS\n' +
+    '^FO319,1143^GB103,463,7^FS\n' +
+    '^FT670,159^A0R,45,46^FH\\^FD' + v(d.anp) + '^FS\n' +
+    '^FT481,271^A0R,61,66^FH\\^FDVAL:^FS\n' +
+    '^FO421,741^GB232,0,8^FS\n' +
+    '^FO30,24^GB623,1582,8^FS\n' +
+    '^FT347,1344^A0R,61,89^FH\\^FD' + v(d.lote) + '^FS\n' +
+    '^BY3,3,138^FT467,1178^BCR,,Y,N^FH\\^FD>;' + v(d.ean13) + '^FS\n' +
+    '^FT263,300^A0R,35,22^FH\\^FD' + v(d.comp1) + '^FS\n' +
+    '^FT228,300^A0R,35,22^FH\\^FD' + v(d.comp2) + '^FS\n' +
+    '^FT193,300^A0R,35,22^FH\\^FD' + v(d.comp3) + '^FS\n' +
+    '^FT158,300^A0R,35,22^FH\\^FD' + v(d.comp4) + '^FS\n' +
+    '^FT123,300^A0R,35,22^FH\\^FD' + v(d.aplic1) + '^FS\n' +
+    '^FT88,300^A0R,35,22^FH\\^FD' + v(d.aplic2) + '^FS\n' +
+    '^FT53,300^A0R,35,22^FH\\^FD' + v(d.aplic3) + '^FS\n' +
+    '^FT18,300^A0R,35,22^FH\\^FD' + v(d.aplic4) + '^FS\n' +
+    '^FT349,463^A0R,62,66^FH\\^FD' + v(d.pbruto) + '^FS\n' +
+    '^FT349,969^A0R,62,61^FH\\^FD' + v(d.pliq) + '^FS\n' +
+    '^FO420,20^BQN,2,7^FDQA,' + v(d.qr) + '^FS\n' +
+    '^FT562,394^A0R,59,71^FH\\^FD' + v(d.data_fab) + '^FS\n' +
+    '^FT466,992^A0R,59,51^FH\\^FD' + v(d.seq) + '^FS\n' +
+    '^FT714,49^A0R,78,76^FH\\^FD' + v(d.produto) + '^FS\n' +
+    '^FT668,1378^A0R,39,41^FH\\^FD' + v(d.codigo) + '^FS\n' +
+    '^FT483,392^A0R,59,71^FH\\^FD' + v(d.validade) + '^FS\n' +
+    '^PQ1,0,1,Y\n^XZ\n';
+}
+
+// Folha A4 deitada (mesmo layout do server.js)
+function htmlLaser(d) {
+  var qr = qrcode(0, 'M');
+  qr.addData(String(d.qr_code_pallet || 'ERRO'));
+  qr.make();
+  var qrImg = qr.createDataURL(8, 1);
+
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>' +
+    '@page { size: A4 landscape; margin: 0; }' +
+    'html, body { margin:0; padding:0; width:297mm; height:210mm; overflow:hidden; box-sizing:border-box; background:white; font-family:Arial, sans-serif; color:#000; }' +
+    '.container { padding:30px 40px; width:100%; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; }' +
+    '.titulo { font-size:70px; font-weight:bold; text-align:center; border-bottom:5px solid #000; padding-bottom:10px; margin-bottom:10px; text-transform:uppercase; }' +
+    '.info-grid { display:flex; justify-content:space-between; font-size:30px; }' +
+    '.info-coluna { display:flex; flex-direction:column; gap:15px; }' +
+    '.destaque { font-size:50px; font-weight:bold; }' +
+    '.rodape { display:flex; justify-content:space-between; align-items:center; border-top:5px solid #000; padding-top:15px; }' +
+    '.cod { font-size:110px; font-weight:bold; margin-top:-15px; }' +
+    '.qr-code { width:265px; height:265px; image-rendering:pixelated; }' +
+    '</style></head><body><div class="container">' +
+    '<div class="titulo">' + escHtml(d.descricao) + '</div>' +
+    '<div class="info-grid"><div class="info-coluna">' +
+    '<div><strong>DATA DE FABRICAÇÃO:</strong> ' + escHtml(d.data_fab) + '</div>' +
+    '<div><strong>HORA DE FABRICAÇÃO:</strong> ' + escHtml(d.hora_fab) + '</div>' +
+    '<div><strong>LINHA DE ENVASE:</strong> ' + escHtml(d.linha_envase) + '</div>' +
+    '<div><strong>UNIDADE DE FABRICAÇÃO:</strong> DUNAX BAHIA</div>' +
+    '</div><div class="info-coluna" style="text-align:right;">' +
+    '<div class="destaque">LOTE: ' + escHtml(d.lote) + '</div>' +
+    '<div class="destaque">QTD VOL: ' + escHtml(d.qtd) + '</div>' +
+    '</div></div>' +
+    '<div class="rodape"><div class="cod">COD: ' + escHtml(d.cod_prod) + '</div>' +
+    '<img src="' + qrImg + '" class="qr-code"></div>' +
+    '</div></body></html>';
+}
+
+// Imprime o HTML num iframe escondido. Com o Chrome em --kiosk-printing
+// sai direto na impressora padrão do Windows (a laser), sem janela.
+function imprimirLaser(d) {
+  return new Promise(function (resolve, reject) {
+    try {
+      var iframe = document.getElementById('areaLaser');
+      var doc = iframe.contentWindow.document;
+      doc.open(); doc.write(htmlLaser(d)); doc.close();
+      var img = doc.querySelector('img');
+      var disparar = function () {
+        setTimeout(function () {
+          try { iframe.contentWindow.focus(); iframe.contentWindow.print(); resolve('ok'); }
+          catch (e) { reject(e); }
+        }, 300);
+      };
+      if (img && !img.complete) { img.onload = disparar; img.onerror = disparar; } else { disparar(); }
+    } catch (e) { reject(e); }
+  });
+}
+
+/* ============================ FILA (APPS SCRIPT) ===================== */
+function chamarApi(params) {
+  var q = [];
+  for (var k in params) if (params.hasOwnProperty(k)) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
+  return fetch(URL_API + '?' + q.join('&'), { method: 'GET', redirect: 'follow' })
+    .then(function (r) { return r.json(); });
+}
+
+function marcar(item, status, msg) {
+  return chamarApi({ api: 'marcarImpressao', id: item.id, status: status, msg: msg || '' })
+    .catch(function () { registrarLog('FALHA', 'Não consegui gravar o status do item ' + item.id + ' na planilha'); });
+}
+
+function imprimirItem(item) {
+  var d = item.dados || {};
+  var tipo = String(item.tipo || 'ZEBRA').toUpperCase();
+  var p;
+  if (tipo === 'LASER') p = imprimirLaser(d);
+  else if (tipo === 'TAMBOR') {
+    var lista = d.etiquetas || [];
+    var zpl = '';
+    for (var i = 0; i < lista.length; i++) zpl += zplTambor(lista[i]);
+    p = zpl ? enviarZebra(zpl) : Promise.reject(new Error('Nenhuma etiqueta de tambor recebida'));
+  }
+  else p = enviarZebra(zplPallet(d));
+
+  var resumo = tipo + ' · ' + (d.lote || (d.etiquetas && d.etiquetas[0] && d.etiquetas[0].lote) || '') + ' · ' + (d.descricao || '');
+  return p.then(function () {
+    registrarLog('IMPRESSO', resumo);
+    return marcar(item, 'IMPRESSO', '');
+  }).catch(function (e) {
+    registrarLog('FALHA', resumo + ' — ' + (e && e.message ? e.message : e));
+    return marcar(item, 'FALHA', e && e.message ? e.message : String(e));
+  });
+}
+
+function verificarFila() {
+  if (ocupado) return;
+  if (URL_API.indexOf('COLE_AQUI') === 0) {
+    document.getElementById('txtFila').innerText = 'Configure a URL_API';
+    pintarCard('cardFila', 'erro');
+    return;
+  }
+  ocupado = true;
+  chamarApi({ api: 'filaImpressao' }).then(function (res) {
+    if (!res || !res.ok) throw new Error(res && res.erro ? res.erro : 'Resposta inválida');
+    var itens = res.itens || [];
+    document.getElementById('txtFila').innerText = itens.length ? itens.length + ' para imprimir' : 'Em dia';
+    document.getElementById('subFila').innerText = 'Última consulta: ' + horaAgora();
+    pintarCard('cardFila', 'ok');
+
+    // um de cada vez, na ordem em que chegaram
+    var cadeia = Promise.resolve();
+    itens.forEach(function (it) { cadeia = cadeia.then(function () { return imprimirItem(it); }); });
+    return cadeia;
+  }).catch(function (e) {
+    document.getElementById('txtFila').innerText = 'Sem conexão com o sistema';
+    document.getElementById('subFila').innerText = (e && e.message ? e.message : '') + ' · ' + horaAgora();
+    pintarCard('cardFila', 'erro');
+  }).then(function () { ocupado = false; });
+}
+
+/* ============================== CONTROLES ============================ */
+function alternarPausa() {
+  pausado = !pausado;
+  var b = document.getElementById('btnPausa');
+  b.innerText = pausado ? '▶ RETOMAR' : '⏸ PAUSAR';
+  b.className = pausado ? 'laranja' : 'verde';
+  registrarLog('INFO', pausado ? 'Impressão pausada' : 'Impressão retomada');
+}
+
+function testeZebra() {
+  enviarZebra('^XA^CI28^PW840^LL400^FO60,60^A0N,60,60^FDTESTE ESTAÇÃO ENVASE^FS^FO60,150^A0N,40,40^FD' + new Date().toLocaleString('pt-BR') + '^FS^XZ')
+    .then(function () { registrarLog('IMPRESSO', 'Teste Zebra'); })
+    .catch(function (e) { registrarLog('FALHA', 'Teste Zebra — ' + e.message); });
+}
+
+// Substitui o AJUSTE IMPRESSORA.BAT: grava escuridão e velocidade na memória da Zebra
+function ajustarEscuridao() {
+  enviarZebra('~SD' + ESCURIDAO + '\n^XA\n^MD0\n^PR' + VELOCIDADE + ',' + VELOCIDADE + '\n^JUS\n^XZ\n')
+    .then(function () { registrarLog('INFO', 'Escuridão ' + ESCURIDAO + ' e velocidade ' + VELOCIDADE + ' gravadas na Zebra'); })
+    .catch(function (e) { registrarLog('FALHA', 'Ajuste de escuridão — ' + e.message); });
+}
+
+function testeLaser() {
+  imprimirLaser({ descricao: 'TESTE DE IMPRESSÃO', data_fab: new Date().toLocaleDateString('pt-BR'), hora_fab: horaAgora(),
+                  linha_envase: 'TESTE', lote: 'DB0000', qtd: '0', cod_prod: '0000', qr_code_pallet: 'TESTE' })
+    .then(function () { registrarLog('IMPRESSO', 'Teste Laser'); })
+    .catch(function (e) { registrarLog('FALHA', 'Teste Laser — ' + e.message); });
+}
+
+/* =============================== INÍCIO ============================== */
+procurarZebra().then(function () { verificarFila(); });
+setInterval(function () { if (!pausado) verificarFila(); }, INTERVALO_MS);
+setInterval(function () { if (!zebra) procurarZebra(); }, 60000);
+</script>
+</body>
+</html>
