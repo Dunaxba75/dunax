@@ -27,6 +27,19 @@
   .log td.hora { color:#7f8c8d; white-space:nowrap; width:70px; }
   .log td.st { font-weight:bold; white-space:nowrap; width:110px; }
   .st.IMPRESSO { color:#27ae60; } .st.FALHA { color:#c0392b; } .st.INFO { color:#2980b9; }
+  .config { background:#fff; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); padding:14px; margin-bottom:14px; display:none; border-left:7px solid #2980b9; }
+  .config h3 { margin:0 0 10px; font-size:15px; color:#2c3e50; }
+  .config .linha { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .config label { display:block; font-size:12px; font-weight:bold; color:#555; margin-bottom:4px; }
+  .config input, .config select { width:100%; box-sizing:border-box; padding:9px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; }
+  .config .dica { font-size:11.5px; color:#7f8c8d; margin-top:4px; line-height:1.4; }
+  .config .acoes { margin-top:12px; display:flex; gap:10px; }
+  .config .acoes button { padding:10px 16px; border:none; border-radius:8px; font-weight:bold; cursor:pointer; color:#fff; background:#27ae60; }
+  .config .acoes .cinza { background:#7f8c8d; }
+  .passo { display:flex; gap:6px; }
+  .passo button { width:42px; border:none; border-radius:6px; background:#2980b9; color:#fff; font-size:20px; font-weight:bold; cursor:pointer; }
+  .passo input { text-align:center; font-size:18px; font-weight:bold; }
+  .header .est { background:#34495e; padding:5px 10px; border-radius:6px; font-size:13px; font-weight:bold; margin-right:12px; }
   #areaLaser { position:absolute; left:-10000px; top:0; width:10px; height:10px; border:0; }
 </style>
 </head>
@@ -34,14 +47,40 @@
 
 <div class="header">
   <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE</div>
-  <div class="h" id="relogio">--:--:--</div>
+  <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
 <div class="wrap">
+  <!-- CONFIGURAÇÃO DESTA ESTAÇÃO (fica salva neste PC/navegador) -->
+  <div class="config" id="boxConfig">
+    <h3>⚙ Configuração desta estação</h3>
+    <div class="linha">
+      <div>
+        <label>Nome da estação</label>
+        <input id="cfgNome" placeholder="Ex.: PRODUCAO-1" maxlength="30">
+        <div class="dica">É o nome que aparece no Painel Zebra para escolher qual PC imprime. Use um nome diferente em cada PC.</div>
+      </div>
+      <div>
+        <label>Zebra desta estação</label>
+        <select id="cfgZebra"><option value="">(padrão do Browser Print)</option></select>
+        <div class="dica">Lista das Zebras que o Browser Print encontrou neste PC.</div>
+      </div>
+      <div>
+        <label>Laser desta estação (só para identificar)</label>
+        <input id="cfgLaser" placeholder="Ex.: Samsung ML-371x">
+        <div class="dica">A folha A4 sai na impressora <b>padrão do Windows</b>. Para trocar a laser, mude a impressora padrão neste PC.</div>
+      </div>
+    </div>
+    <div class="acoes">
+      <button onclick="salvarConfig()">💾 SALVAR</button>
+      <button class="cinza" onclick="mostrarConfig(false)">FECHAR</button>
+    </div>
+  </div>
+
   <div class="cards">
     <div class="card" id="cardZebra"><div class="r">Zebra (Browser Print)</div><div class="v" id="txtZebra">Procurando...</div><div class="s" id="subZebra"></div></div>
     <div class="card" id="cardFila"><div class="r">Fila do sistema</div><div class="v" id="txtFila">Aguardando...</div><div class="s" id="subFila"></div></div>
-    <div class="card ok" id="cardLaser"><div class="r">Laser (impressora padrão)</div><div class="v">Pelo Chrome</div><div class="s">Abra esta página pelo atalho com --kiosk-printing</div></div>
+    <div class="card ok" id="cardLaser"><div class="r">Laser (impressora padrão do Windows)</div><div class="v" id="txtLaser">Pelo Chrome</div><div class="s">Abra esta página pelo atalho com --kiosk-printing</div></div>
   </div>
 
   <div class="botoes">
@@ -50,7 +89,43 @@
     <button class="cinza" onclick="procurarZebra()">🔍 PROCURAR ZEBRA</button>
     <button class="laranja" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
     <button class="laranja" onclick="testeLaser()">🧪 TESTE LASER</button>
-    <button class="cinza" onclick="ajustarEscuridao()">🎚 AJUSTAR ESCURIDÃO</button>
+    <button class="cinza" onclick="mostrarAjuste()">🎚 AJUSTAR ESCURIDÃO</button>
+    <button class="cinza" onclick="mostrarConfig(true)">⚙ CONFIGURAR ESTAÇÃO</button>
+  </div>
+
+  <!-- AJUSTE DA ZEBRA (escuridão e velocidade, gravados na memória da impressora) -->
+  <div class="config" id="boxAjuste">
+    <h3>🎚 Ajuste da Zebra desta estação</h3>
+    <div class="linha" style="grid-template-columns:1fr 1fr 2fr;">
+      <div>
+        <label>Escuridão (0 a 30)</label>
+        <div class="passo">
+          <button onclick="passo('ajEsc',-1,0,30)">−</button>
+          <input id="ajEsc" type="number" min="0" max="30" step="1">
+          <button onclick="passo('ajEsc',1,0,30)">+</button>
+        </div>
+        <div class="dica">Maior = mais escuro. Etiqueta borrada ou "manchada": diminua.</div>
+      </div>
+      <div>
+        <label>Velocidade (2 a 6)</label>
+        <div class="passo">
+          <button onclick="passo('ajVel',-1,2,6)">−</button>
+          <input id="ajVel" type="number" min="2" max="6" step="1">
+          <button onclick="passo('ajVel',1,2,6)">+</button>
+        </div>
+        <div class="dica">Menor = mais lento e mais escuro. Maior = mais rápido e mais claro.</div>
+      </div>
+      <div>
+        <label>Como usar</label>
+        <div class="dica" style="font-size:12.5px;">Ajuste os valores, clique em <b>GRAVAR NA ZEBRA</b> e depois em <b>TESTE ZEBRA</b> para conferir.
+          O ajuste fica gravado na impressora e vale para pallet e tambor. Cada estação guarda os seus valores.</div>
+      </div>
+    </div>
+    <div class="acoes">
+      <button onclick="ajustarEscuridao()">💾 GRAVAR NA ZEBRA</button>
+      <button style="background:#e67e22;" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
+      <button class="cinza" onclick="document.getElementById('boxAjuste').style.display='none'">FECHAR</button>
+    </div>
   </div>
 
   <div class="log">
@@ -76,7 +151,7 @@
 var URL_API = 'https://script.google.com/macros/s/AKfycbyiIBPZgDqtD7ftYrhGP5mCsx7HoazMFAiFjFrmE4cvvUwvV6k0zf1L64-P58aSuEyl/exec';
 var TOKEN_API = 'DUNAX-ENVASE-2026';         // o mesmo do ESTACAO.TOKEN no EstacaoImpressao.gs
 var INTERVALO_MS = 10000;                   // consulta a fila a cada 10 s
-var NOME_ZEBRA_PREFERIDA = 'ZDesigner ZT231-203dpi ZPL'
+var NOME_ZEBRA_PREFERIDA = '';              // reserva: a Zebra é escolhida em ⚙ CONFIGURAR ESTAÇÃO
 var ESCURIDAO = 27;                         // 0 a 30 (mais alto = mais escuro) — igual ao AJUSTE IMPRESSORA.BAT
 var VELOCIDADE = 2;                         // 2 a 6 (mais baixo = mais escuro)
 /* --------------------------------------------------------------------- */
@@ -86,6 +161,56 @@ var bpBase = null;          // porta do Browser Print que respondeu
 var zebra = null;           // dispositivo Zebra escolhido
 var pausado = false;
 var ocupado = false;
+var zebrasEncontradas = [];  // lista do Browser Print, para o seletor da configuração
+
+/* ===================== CONFIGURAÇÃO LOCAL DA ESTAÇÃO ================= */
+// Fica no navegador deste PC. Se o armazenamento falhar, segue com o que estiver na tela.
+var CFG = { nome: '', zebra: '', laser: '' };
+function lerLocal(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+function gravarLocal(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function carregarConfig() {
+  CFG.nome = lerLocal('est_nome');
+  CFG.zebra = lerLocal('est_zebra');
+  CFG.laser = lerLocal('est_laser');
+  pintarConfig();
+}
+function pintarConfig() {
+  document.getElementById('nomeEstacao').innerText = CFG.nome ? 'ESTAÇÃO ' + CFG.nome : 'SEM NOME';
+  document.getElementById('txtLaser').innerText = CFG.laser || 'Pelo Chrome';
+}
+function limparNome(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9 _\-]/g, '').trim().slice(0, 30); }
+function mostrarConfig(abrir) {
+  document.getElementById('boxConfig').style.display = abrir ? 'block' : 'none';
+  if (abrir) {
+    document.getElementById('cfgNome').value = CFG.nome;
+    document.getElementById('cfgLaser').value = CFG.laser;
+    preencherSeletorZebra();
+  }
+}
+function preencherSeletorZebra() {
+  var sel = document.getElementById('cfgZebra');
+  var html = '<option value="">(padrão do Browser Print)</option>';
+  zebrasEncontradas.forEach(function (z) {
+    html += '<option value="' + escHtml(z.name) + '">' + escHtml(z.name) + (z.connection ? ' · ' + escHtml(z.connection) : '') + '</option>';
+  });
+  if (CFG.zebra && !zebrasEncontradas.some(function (z) { return z.name === CFG.zebra; })) {
+    html += '<option value="' + escHtml(CFG.zebra) + '">' + escHtml(CFG.zebra) + ' (não encontrada agora)</option>';
+  }
+  sel.innerHTML = html;
+  sel.value = CFG.zebra;
+}
+function salvarConfig() {
+  var nome = limparNome(document.getElementById('cfgNome').value);
+  if (!nome) { alert('Informe o nome desta estação (ex.: PRODUCAO-1).'); return; }
+  CFG.nome = nome;
+  CFG.zebra = document.getElementById('cfgZebra').value;
+  CFG.laser = String(document.getElementById('cfgLaser').value || '').trim();
+  gravarLocal('est_nome', CFG.nome); gravarLocal('est_zebra', CFG.zebra); gravarLocal('est_laser', CFG.laser);
+  pintarConfig();
+  mostrarConfig(false);
+  registrarLog('INFO', 'Configuração salva: ' + CFG.nome + (CFG.zebra ? ' · ' + CFG.zebra : ''));
+  procurarZebra().then(function () { verificarFila(); });
+}
 
 /* ============================ UTILITÁRIOS ============================ */
 function doisDig(n) { return ('0' + n).slice(-2); }
@@ -149,9 +274,11 @@ function procurarZebra() {
       return r.json();
     }).then(function (lista) {
       var impressoras = (lista && lista.printer) ? lista.printer : [];
-      if (NOME_ZEBRA_PREFERIDA) {
+      zebrasEncontradas = impressoras;
+      var preferida = CFG.zebra || NOME_ZEBRA_PREFERIDA;
+      if (preferida) {
         for (var k = 0; k < impressoras.length; k++) {
-          if (impressoras[k].name === NOME_ZEBRA_PREFERIDA) zebra = impressoras[k];
+          if (impressoras[k].name === preferida) zebra = impressoras[k];
         }
       }
       if (zebra) return zebra;
@@ -357,13 +484,22 @@ function verificarFila() {
     pintarCard('cardFila', 'erro');
     return;
   }
+  if (!CFG.nome) {
+    document.getElementById('txtFila').innerText = 'Dê um nome a esta estação';
+    document.getElementById('subFila').innerText = 'Clique em ⚙ CONFIGURAR ESTAÇÃO';
+    pintarCard('cardFila', 'erro');
+    if (document.getElementById('boxConfig').style.display !== 'block') mostrarConfig(true);
+    return;
+  }
   ocupado = true;
-  chamarApi({ api: 'filaImpressao' }).then(function (res) {
+  chamarApi({ api: 'filaImpressao', estacao: CFG.nome, zebra: zebra ? zebra.name : '', laser: CFG.laser }).then(function (res) {
     if (!res || !res.ok) throw new Error(res && res.erro ? res.erro : 'Resposta inválida');
     var itens = res.itens || [];
     if (res.emEspera) {
-      document.getElementById('txtFila').innerText = 'Em espera — sistema usando o NGROK';
-      document.getElementById('subFila').innerText = 'Para usar a estação: Painel Zebra → Envio da impressão → ESTAÇÃO · ' + horaAgora();
+      document.getElementById('txtFila').innerText = res.motivo === 'OUTRA'
+        ? 'Em espera — quem imprime é a ' + res.ativa
+        : 'Em espera — sistema usando o NGROK';
+      document.getElementById('subFila').innerText = 'Para esta estação imprimir: Painel Zebra → Envio da impressão → ' + CFG.nome + ' · ' + horaAgora();
       pintarCard('cardFila', 'aviso');
       return;
     }
@@ -398,10 +534,36 @@ function testeZebra() {
     .catch(function (e) { registrarLog('FALHA', 'Teste Zebra — ' + e.message); });
 }
 
-// Substitui o AJUSTE IMPRESSORA.BAT: grava escuridão e velocidade na memória da Zebra
+// Substitui o AJUSTE IMPRESSORA.BAT: grava escuridão e velocidade na memória da Zebra.
+// Os valores ficam salvos neste PC (cada estação/Zebra tem os seus).
+function lerAjuste() {
+  var e = parseInt(lerLocal('est_escuridao'), 10), v = parseInt(lerLocal('est_velocidade'), 10);
+  return { esc: isNaN(e) ? ESCURIDAO : e, vel: isNaN(v) ? VELOCIDADE : v };
+}
+
+function mostrarAjuste() {
+  var a = lerAjuste();
+  document.getElementById('ajEsc').value = a.esc;
+  document.getElementById('ajVel').value = a.vel;
+  document.getElementById('boxAjuste').style.display = 'block';
+}
+
+function passo(id, delta, min, max) {
+  var el = document.getElementById(id);
+  var n = (parseInt(el.value, 10) || 0) + delta;
+  el.value = Math.max(min, Math.min(max, n));
+}
+
 function ajustarEscuridao() {
-  enviarZebra('~SD' + ESCURIDAO + '\n^XA\n^MD0\n^PR' + VELOCIDADE + ',' + VELOCIDADE + '\n^JUS\n^XZ\n')
-    .then(function () { registrarLog('INFO', 'Escuridão ' + ESCURIDAO + ' e velocidade ' + VELOCIDADE + ' gravadas na Zebra'); })
+  var esc = parseInt(document.getElementById('ajEsc').value, 10);
+  var vel = parseInt(document.getElementById('ajVel').value, 10);
+  if (isNaN(esc) || esc < 0 || esc > 30) { alert('Escuridão deve ser de 0 a 30.'); return; }
+  if (isNaN(vel) || vel < 2 || vel > 6) { alert('Velocidade deve ser de 2 a 6.'); return; }
+  enviarZebra('~SD' + (esc < 10 ? '0' + esc : esc) + '\n^XA\n^MD0\n^PR' + vel + ',' + vel + '\n^JUS\n^XZ\n')
+    .then(function () {
+      gravarLocal('est_escuridao', String(esc)); gravarLocal('est_velocidade', String(vel));
+      registrarLog('INFO', 'Escuridão ' + esc + ' e velocidade ' + vel + ' gravadas na Zebra' + (zebra ? ' (' + zebra.name + ')' : ''));
+    })
     .catch(function (e) { registrarLog('FALHA', 'Ajuste de escuridão — ' + e.message); });
 }
 
@@ -413,6 +575,7 @@ function testeLaser() {
 }
 
 /* =============================== INÍCIO ============================== */
+carregarConfig();
 procurarZebra().then(function () { verificarFila(); });
 setInterval(function () { if (!pausado) verificarFila(); }, INTERVALO_MS);
 setInterval(function () { if (!zebra) procurarZebra(); }, 60000);
