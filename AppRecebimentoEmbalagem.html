@@ -405,15 +405,15 @@ function buildZPL(d){
   z+='^FT42,1580^A0B,34,16^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
   if(d.seq) z+='^FT282,1585^A0B,48,30^FDETIQ '+esc(d.seq)+'^FS\n';
 
-  // ----- nome do produto: 1 LINHA, ESCALONAMENTO 100% (NAT=1.3), WMAX=105 (hm máx 136 p/ aliviar o ribbon) -----
+  // ----- nome do produto: MÁXIMO TAMANHO POSSÍVEL na coluna, mantendo ESCALONAMENTO 100% (NAT=1.3) -----
   var len=Math.max(1,nome.length);
-  var LMAT=1250, WMAX=105, CY=927, NAT=1.3, ADV=0.60;
-  var LLIM=50, RLIM=(d.seq?230:285), AW=Math.min(140, RLIM-LLIM);
+  var LMAT=1320, WMAX=170, CY=927, NAT=1.3, ADV=0.53;        // LMAT=1320 (~165mm); ADV=0.53 aproveita toda a extensão
+  var LLIM=46, RLIM=(d.seq?236:282), AW=RLIM-LLIM;           // Usa toda a largura livre (190 dots c/ ETIQ ou 236 s/ ETIQ)
   var wm=Math.max(18, Math.min(Math.floor(LMAT/(ADV*len)), Math.floor(AW/NAT), WMAX));
-  var hm=Math.round(wm*NAT);
-  var matX=Math.round(LLIM + hm*0.85);
+  var hm=Math.round(wm*NAT);                                  // 100%: altura proporcional à largura (sem achatar)
+  var matX=Math.round(LLIM + hm*0.82);                        // encostado próximo à margem esquerda ("IDENTIFICAÇÃO DE MATERIAL")
   var compReal=len*wm*ADV;
-  var by=Math.min(1585, Math.max(Math.round(265+compReal), Math.round(CY+compReal/2)));
+  var by=Math.min(1592, Math.max(Math.round(258+compReal), Math.round(CY+compReal/2))); // centralizado entre 248 e 1606
   z+='^FT'+matX+','+by+'^A0B,'+hm+','+wm+'^FD'+nome+'^FS\n';
 
   // ===== banda superior: QTD + DATA RECEBIMENTO =====
