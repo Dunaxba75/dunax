@@ -73,10 +73,10 @@
 
 /* ------------------------- CONFIGURAÇÃO ------------------------------ */
 // URL da implantação do Apps Script da planilha App_Validador_QR_Caixas (termina em /exec)
-var URL_API = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT/exec';
+var URL_API = 'https://script.google.com/macros/s/AKfycbyiIBPZgDqtD7ftYrhGP5mCsx7HoazMFAiFjFrmE4cvvUwvV6k0zf1L64-P58aSuEyl/exec';
 var TOKEN_API = 'DUNAX-ENVASE-2026';         // o mesmo do ESTACAO.TOKEN no EstacaoImpressao.gs
 var INTERVALO_MS = 10000;                   // consulta a fila a cada 10 s
-var NOME_ZEBRA_PREFERIDA = '';              // vazio = usa a Zebra padrão do Browser Print
+var NOME_ZEBRA_PREFERIDA = 'ZDesigner ZT231-203dpi ZPL'
 var ESCURIDAO = 27;                         // 0 a 30 (mais alto = mais escuro) — igual ao AJUSTE IMPRESSORA.BAT
 var VELOCIDADE = 2;                         // 2 a 6 (mais baixo = mais escuro)
 /* --------------------------------------------------------------------- */
