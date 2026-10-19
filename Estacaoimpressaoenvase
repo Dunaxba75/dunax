@@ -74,6 +74,7 @@
 /* ------------------------- CONFIGURAÇÃO ------------------------------ */
 // URL da implantação do Apps Script da planilha App_Validador_QR_Caixas (termina em /exec)
 var URL_API = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT/exec';
+var TOKEN_API = 'DUNAX-ENVASE-2026';         // o mesmo do ESTACAO.TOKEN no EstacaoImpressao.gs
 var INTERVALO_MS = 10000;                   // consulta a fila a cada 10 s
 var NOME_ZEBRA_PREFERIDA = '';              // vazio = usa a Zebra padrão do Browser Print
 var ESCURIDAO = 27;                         // 0 a 30 (mais alto = mais escuro) — igual ao AJUSTE IMPRESSORA.BAT
@@ -305,6 +306,7 @@ function imprimirLaser(d) {
 
 /* ============================ FILA (APPS SCRIPT) ===================== */
 function chamarApi(params) {
+  params.token = TOKEN_API;
   var q = [];
   for (var k in params) if (params.hasOwnProperty(k)) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
   return fetch(URL_API + '?' + q.join('&'), { method: 'GET', redirect: 'follow' })
@@ -320,6 +322,14 @@ function imprimirItem(item) {
   var d = item.dados || {};
   var tipo = String(item.tipo || 'ZEBRA').toUpperCase();
   var p;
+  // Zebra fora do ar: devolve o item para a fila sem gastar tentativa
+  if (tipo !== 'LASER' && !zebra) {
+    return marcar(item, 'LIBERAR', '');
+  }
+  if (tipo === 'TAMBOR' && String(d.layout || 'TOPO').toUpperCase() === 'LATERAL') {
+    registrarLog('FALHA', 'Tambor LATERAL — molde ainda não configurado na estação');
+    return marcar(item, 'FALHA', 'Layout LATERAL ainda não configurado na estação');
+  }
   if (tipo === 'LASER') p = imprimirLaser(d);
   else if (tipo === 'TAMBOR') {
     var lista = d.etiquetas || [];
@@ -334,8 +344,9 @@ function imprimirItem(item) {
     registrarLog('IMPRESSO', resumo);
     return marcar(item, 'IMPRESSO', '');
   }).catch(function (e) {
-    registrarLog('FALHA', resumo + ' — ' + (e && e.message ? e.message : e));
-    return marcar(item, 'FALHA', e && e.message ? e.message : String(e));
+    registrarLog('FALHA', resumo + ' — ' + (e && e.message ? e.message : e) + ' (tenta de novo; na 3ª falha grava FALHA DE IMPRESSÃO)');
+    if (tipo !== 'LASER') procurarZebra();
+    return marcar(item, 'TENTAR', e && e.message ? e.message : String(e));
   });
 }
 
@@ -350,9 +361,16 @@ function verificarFila() {
   chamarApi({ api: 'filaImpressao' }).then(function (res) {
     if (!res || !res.ok) throw new Error(res && res.erro ? res.erro : 'Resposta inválida');
     var itens = res.itens || [];
-    document.getElementById('txtFila').innerText = itens.length ? itens.length + ' para imprimir' : 'Em dia';
-    document.getElementById('subFila').innerText = 'Última consulta: ' + horaAgora();
-    pintarCard('cardFila', 'ok');
+    if (res.emEspera) {
+      document.getElementById('txtFila').innerText = 'Em espera — sistema usando o NGROK';
+      document.getElementById('subFila').innerText = 'Para usar a estação: Painel Zebra → Envio da impressão → ESTAÇÃO · ' + horaAgora();
+      pintarCard('cardFila', 'aviso');
+      return;
+    }
+    document.getElementById('txtFila').innerText = res.pausado ? 'Pallets PAUSADOS no Painel Zebra' : (itens.length ? itens.length + ' para imprimir' : 'Em dia');
+    document.getElementById('subFila').innerText = res.tipo ? 'Modo dos pallets: ' + res.tipo : '';
+    document.getElementById('subFila').innerText += ' · última consulta ' + horaAgora();
+    pintarCard('cardFila', res.pausado ? 'aviso' : 'ok');
 
     // um de cada vez, na ordem em que chegaram
     var cadeia = Promise.resolve();
