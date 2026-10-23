@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DULUB | Etiquetas de Amostra — Laboratório</title>
+<style>
+  body { font-family:'Segoe UI', Roboto, Arial, sans-serif; background:#f0f2f5; margin:0; color:#333; }
+  .header { background:#1e3a5f; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; }
+  .header .t { font-weight:bold; font-size:17px; letter-spacing:1px; }
+  .header .h { font-size:13px; opacity:.9; }
+  .wrap { max-width:1250px; margin:0 auto; padding:14px; }
+  .topo { display:flex; gap:10px; flex-wrap:wrap; align-items:stretch; margin-bottom:12px; }
+  .card { background:#fff; border-radius:10px; padding:10px 14px; box-shadow:0 2px 4px rgba(0,0,0,.08); border-left:6px solid #95a5a6; min-width:230px; }
+  .card.ok { border-left-color:#27ae60; } .card.erro { border-left-color:#c0392b; } .card.aviso { border-left-color:#e67e22; }
+  .card .r { font-size:11px; font-weight:bold; color:#7f8c8d; text-transform:uppercase; }
+  .card .v { font-size:15px; font-weight:bold; margin-top:4px; }
+  .card .s { font-size:11.5px; color:#7f8c8d; margin-top:2px; }
+  button { font-family:inherit; }
+  .bt { padding:9px 14px; border:none; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer; color:#fff; background:#2980b9; }
+  .bt.verde { background:#27ae60; } .bt.cinza { background:#7f8c8d; } .bt.laranja { background:#e67e22; } .bt.vermelho { background:#c0392b; }
+  .bt:disabled { background:#bdc3c7; cursor:not-allowed; }
+  .grade { display:grid; grid-template-columns:360px 1fr; gap:14px; }
+  .lista { background:#fff; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); overflow:hidden; align-self:start; }
+  .lista .tit { background:#ecf0f1; padding:10px 14px; font-weight:bold; font-size:13px; color:#2c3e50; display:flex; justify-content:space-between; align-items:center; }
+  .item { padding:10px 14px; border-top:1px solid #eef0f2; cursor:pointer; }
+  .item:hover { background:#f7f9fb; }
+  .item.sel { background:#eaf3fb; border-left:5px solid #2980b9; padding-left:9px; }
+  .item .l1 { font-weight:bold; font-size:14px; color:#2c3e50; }
+  .item .l2 { font-size:12px; color:#7f8c8d; margin-top:2px; }
+  .tag { display:inline-block; font-size:10.5px; font-weight:bold; padding:2px 7px; border-radius:10px; background:#eee; color:#555; margin-right:4px; }
+  .tag.pre { background:#e8f6ee; color:#1e8449; } .tag.base { background:#fdf2e3; color:#a35b00; } .tag.man { background:#eef0f7; color:#34495e; }
+  .tag.feita { background:#27ae60; color:#fff; }
+  .vazio { padding:20px 14px; color:#95a5a6; font-size:13px; text-align:center; }
+  .editor { background:#fff; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); padding:16px; }
+  .editor h3 { margin:0 0 12px; font-size:16px; color:#2c3e50; }
+  .campos { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px 12px; }
+  .campos .dois { grid-column:span 2; } .campos .quatro { grid-column:span 4; }
+  .campos label { display:block; font-size:11.5px; font-weight:bold; color:#555; margin-bottom:3px; }
+  .campos input, .campos select { width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; }
+  .amostras { display:flex; gap:8px; }
+  .amostras button { flex:1; padding:12px 6px; border:2px solid #cbd5e1; background:#fff; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer; color:#2c3e50; }
+  .amostras button.on { border-color:#2980b9; background:#eaf3fb; }
+  .amostras button .ok { color:#27ae60; }
+  .acoes { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
+  .aviso { background:#fdf3e2; border-left:5px solid #e67e22; color:#7a4b00; padding:8px 12px; border-radius:6px; font-size:12.5px; margin-bottom:10px; display:none; }
+  .config { background:#fff; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); padding:14px; margin-bottom:12px; display:none; border-left:6px solid #2980b9; }
+  .config h3 { margin:0 0 10px; font-size:15px; }
+  .config .linha { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .config label { display:block; font-size:12px; font-weight:bold; color:#555; margin-bottom:4px; }
+  .config input, .config select { width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; }
+  .config .dica { font-size:11px; color:#7f8c8d; margin-top:3px; }
+  .log { margin-top:12px; font-size:12px; color:#555; max-height:120px; overflow:auto; background:#fff; border-radius:8px; padding:8px 12px; box-shadow:0 2px 4px rgba(0,0,0,.06); }
+  .log div { padding:2px 0; } .log .FALHA { color:#c0392b; font-weight:bold; } .log .OK { color:#27ae60; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="t">DULUB | ETIQUETAS DE AMOSTRA — LABORATÓRIO <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/10</span></div>
+  <div class="h" id="relogio">--:--:--</div>
+</div>
+
+<div class="wrap">
+  <div class="topo">
+    <div class="card" id="cardZebra"><div class="r">Zebra (Browser Print)</div><div class="v" id="txtZebra">Procurando...</div><div class="s" id="subZebra"></div></div>
+    <div class="card" id="cardFila"><div class="r">Fila de etiquetas</div><div class="v" id="txtFila">Carregando...</div><div class="s" id="subFila"></div></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button class="bt verde" onclick="novaEtiqueta()">➕ NOVA ETIQUETA</button>
+      <button class="bt" onclick="carregarFila(true)">↻ ATUALIZAR</button>
+      <button class="bt cinza" onclick="mostrarConfig(true)">⚙ CONFIGURAÇÃO</button>
+      <button class="bt laranja" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
+    </div>
+  </div>
+
+  <!-- CONFIGURAÇÃO DESTE PC -->
+  <div class="config" id="boxConfig">
+    <h3>⚙ Configuração deste PC</h3>
+    <div class="linha">
+      <div><label>Zebra</label><select id="cfgZebra"><option value="">(padrão do Browser Print)</option></select>
+        <div class="dica">Zebras que o Browser Print encontrou neste PC.</div></div>
+      <div><label>Escuridão (0 a 30) / Velocidade (2 a 6)</label>
+        <div style="display:flex; gap:6px;"><input id="cfgEsc" type="number" min="0" max="30"><input id="cfgVel" type="number" min="2" max="6"></div>
+        <div class="dica">Grava na memória da Zebra (botão GRAVAR ESCURIDÃO).</div></div>
+      <div><label>Posição ↕ / ↔ (pontos, 8 = 1 mm)</label>
+        <div style="display:flex; gap:6px;"><input id="cfgDx" type="number" step="8"><input id="cfgDy" type="number" step="8"></div>
+        <div class="dica">Igual ao DESLOCAR_X / DESLOCAR_Y da macro (padrão 30 / 0).</div></div>
+      <div><label>Analista padrão (resp. análise nas etiquetas manuais)</label><input id="cfgAnalista" placeholder="Ex.: CAMILLA"></div>
+    </div>
+    <div class="acoes">
+      <button class="bt verde" onclick="salvarConfig()">💾 SALVAR</button>
+      <button class="bt laranja" onclick="gravarEscuridao()">🎚 GRAVAR ESCURIDÃO NA ZEBRA</button>
+      <button class="bt cinza" onclick="mostrarConfig(false)">FECHAR</button>
+    </div>
+  </div>
+
+  <div class="grade">
+    <div class="lista">
+      <div class="tit"><span>📋 Pendentes</span><span id="qtdPend">0</span></div>
+      <div id="listaPend"><div class="vazio">Carregando...</div></div>
+      <div class="tit"><span>✅ Concluídas recentes (reimprimir)</span><span id="qtdRec">0</span></div>
+      <div id="listaRec"></div>
+    </div>
+
+    <div class="editor" id="editor">
+      <h3 id="edTitulo">Selecione uma etiqueta na lista ao lado</h3>
+      <div class="aviso" id="edAviso"></div>
+      <div id="edCorpo" style="display:none;">
+        <div class="campos">
+          <div class="quatro"><label>Amostra</label>
+            <div class="amostras" id="amostras">
+              <button onclick="escolherAmostra('1')" id="am1">1 · BATEDOR</button>
+              <button onclick="escolherAmostra('2')" id="am2">2 · BATEDOR</button>
+              <button onclick="escolherAmostra('3')" id="am3">3 · ENVASE</button>
+            </div></div>
+          <div class="dois"><label>Produto</label><input id="fProduto" list="dlProdutos" oninput="produtoMudou()"></div>
+          <div><label>Código</label><input id="fCodigo"></div>
+          <div><label>Fabricante</label><input id="fFabricante"></div>
+          <div><label>Nº Lote</label><input id="fLote"></div>
+          <div><label>Ponto de coleta</label><input id="fPonto" list="dlPontos"></div>
+          <div><label>Linha de envase</label><input id="fLinha" list="dlLinhas"></div>
+          <div><label>Turno</label><select id="fTurno"><option value=""></option><option>1</option><option>2</option><option>3</option></select></div>
+          <div><label>Data de coleta</label><input id="fData" placeholder="dd/mm/aa" oninput="dataMudou()"></div>
+          <div><label>Hora</label><input id="fHora" placeholder="hh:mm"></div>
+          <div><label>Data de descarte</label><input id="fDescarte" placeholder="dd/mm/aa"></div>
+          <div><label>Qtd. de etiquetas</label><input id="fQtd" type="number" min="1" value="1"></div>
+          <div class="dois"><label>Responsável pela coleta</label><input id="fColeta" list="dlColeta" placeholder="Digite o nome"></div>
+          <div class="dois"><label>Responsável pela análise</label><input id="fAnalise" list="dlAnalise"></div>
+          <div class="dois"><label>Situação</label>
+            <select id="fSituacao" onchange="situacaoMudou()"><option value="APROVADO">( X ) APROVADO</option><option value="CONDIC">( X ) APROVADO CONDICIONAL</option><option value="REPROVADO">( X ) REPROVADO</option></select></div>
+          <div class="dois"><label>Nº RNC (se reprovado)</label><input id="fRnc"></div>
+        </div>
+        <div class="acoes">
+          <button class="bt verde" id="btImprimir" onclick="imprimirSelecionada()">🖨 IMPRIMIR AMOSTRA</button>
+          <button class="bt" onclick="salvarSelecionada(true)">💾 SALVAR ALTERAÇÕES</button>
+          <button class="bt cinza" id="btConcluir" onclick="mudarStatus('concluir')">✔ CONCLUIR (TIRAR DA FILA)</button>
+          <button class="bt vermelho" id="btDescartar" onclick="mudarStatus('descartar')">🗑 DESCARTAR</button>
+          <button class="bt laranja" id="btReabrir" onclick="mudarStatus('reabrir')" style="display:none;">↩ VOLTAR PARA A FILA</button>
+        </div>
+        <div style="font-size:12px; color:#7f8c8d; margin-top:10px;" id="edImpressoes"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<datalist id="dlProdutos"></datalist>
+<datalist id="dlColeta"></datalist>
+<datalist id="dlAnalise"></datalist>
+<datalist id="dlLinhas"></datalist>
+<datalist id="dlPontos"><option value="BATEDOR"><option value="TUBULAÇÃO"><option value="CARRETA"><option value="TANQUE"></datalist>
+
+<script>
+/* =====================================================================
+ *  ETIQUETAS DE AMOSTRA — LABORATÓRIO (Zebra Browser Print)
+ *  Fila alimentada pela FR-LAB-01 (pré-envase concluído e recebimento de óleo base).
+ *  O analista escolhe a etiqueta, confere/edita, escolhe a amostra e imprime.
+ * ===================================================================== */
+
+/* ------------------------- CONFIGURAÇÃO ------------------------------ */
+// URL da implantação (app da web) da FR-LAB-01 com acesso "Qualquer pessoa" — termina em /exec
+var URL_API = 'COLE_AQUI_A_URL_DA_FR-LAB-01/exec';
+var TOKEN_API = 'DUNAX-LAB-2026';            // o mesmo ETQ.TOKEN do EtiquetaAmostras.gs
+var INTERVALO_MS = 20000;                    // atualiza a fila a cada 20 s
+var PADRAO = { esc: 18, vel: 3, dx: 30, dy: 0 };   // mesmos valores da macro do Excel
+/* --------------------------------------------------------------------- */
+
+var BP_PORTAS = ['https://127.0.0.1:9101', 'http://127.0.0.1:9100'];
+var bpBase = null, zebra = null, zebrasEncontradas = [];
+var fila = { pendentes: [], recentes: [], cadastro: { produtos: [], coleta: [], analise: [], linhas: [] } };
+var selecionada = null;     // objeto da etiqueta aberta no editor
+var amostraEscolhida = '';
+var editando = false;       // o analista mexeu em algum campo (não sobrescrever com a atualização)
+
+/* ============================ UTILITÁRIOS ============================ */
+function doisDig(n) { return ('0' + n).slice(-2); }
+function horaAgora() { var d = new Date(); return doisDig(d.getHours()) + ':' + doisDig(d.getMinutes()) + ':' + doisDig(d.getSeconds()); }
+setInterval(function () { document.getElementById('relogio').innerText = horaAgora(); }, 1000);
+function el(id) { return document.getElementById(id); }
+function lerLocal(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+function gravarLocal(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function escHtml(v) { return String(v === undefined || v === null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function log(tipo, txt) {
+  var d = document.createElement('div');
+  d.innerHTML = '<span class="' + tipo + '">' + horaAgora() + ' ' + tipo + '</span> ';
+  d.appendChild(document.createTextNode(txt));
+  var c = el('log'); c.insertBefore(d, c.firstChild);
+  while (c.childNodes.length > 40) c.removeChild(c.lastChild);
+}
+function pintarCard(id, classe) { el(id).className = 'card ' + classe; }
+function numLocal(k, padrao) { var n = parseInt(lerLocal(k), 10); return isNaN(n) ? padrao : n; }
+
+/* ============================ CONFIGURAÇÃO =========================== */
+function cfg() {
+  return { zebra: lerLocal('lab_zebra'), esc: numLocal('lab_esc', PADRAO.esc), vel: numLocal('lab_vel', PADRAO.vel),
+           dx: numLocal('lab_dx', PADRAO.dx), dy: numLocal('lab_dy', PADRAO.dy), analista: lerLocal('lab_analista') };
+}
+function mostrarConfig(abrir) {
+  el('boxConfig').style.display = abrir ? 'block' : 'none';
+  if (!abrir) return;
+  var c = cfg();
+  var html = '<option value="">(padrão do Browser Print)</option>';
+  zebrasEncontradas.forEach(function (z) { html += '<option value="' + escHtml(z.name) + '">' + escHtml(z.name) + '</option>'; });
+  el('cfgZebra').innerHTML = html; el('cfgZebra').value = c.zebra;
+  el('cfgEsc').value = c.esc; el('cfgVel').value = c.vel; el('cfgDx').value = c.dx; el('cfgDy').value = c.dy;
+  el('cfgAnalista').value = c.analista;
+}
+function salvarConfig() {
+  gravarLocal('lab_zebra', el('cfgZebra').value);
+  gravarLocal('lab_esc', String(parseInt(el('cfgEsc').value, 10) || PADRAO.esc));
+  gravarLocal('lab_vel', String(parseInt(el('cfgVel').value, 10) || PADRAO.vel));
+  gravarLocal('lab_dx', String(parseInt(el('cfgDx').value, 10) || 0));
+  gravarLocal('lab_dy', String(parseInt(el('cfgDy').value, 10) || 0));
+  gravarLocal('lab_analista', String(el('cfgAnalista').value || '').trim().toUpperCase());
+  mostrarConfig(false);
+  log('OK', 'Configuração salva');
+  procurarZebra();
+}
+
+/* ======================== ZEBRA BROWSER PRINT ======================== */
+function bpRequisicao(metodo, caminho, corpo) {
+  return fetch(bpBase + caminho, { method: metodo, headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: corpo })
+    .then(function (r) { if (!r.ok) throw new Error('Browser Print respondeu ' + r.status); return r.text(); });
+}
+function procurarZebra() {
+  el('txtZebra').innerText = 'Procurando...'; pintarCard('cardZebra', 'aviso');
+  bpBase = null; zebra = null;
+  var i = 0;
+  function tentar() {
+    if (i >= BP_PORTAS.length) {
+      el('txtZebra').innerText = 'Browser Print não encontrado';
+      el('subZebra').innerText = 'Abra o Zebra Browser Print. 1ª vez: abra https://127.0.0.1:9101/ssl_support e aceite.';
+      pintarCard('cardZebra', 'erro');
+      return Promise.resolve(false);
+    }
+    var porta = BP_PORTAS[i++];
+    return fetch(porta + '/available').then(function (r) { if (!r.ok) throw new Error(); bpBase = porta; return r.json(); })
+      .then(function (lista) {
+        zebrasEncontradas = (lista && lista.printer) ? lista.printer : [];
+        var pref = cfg().zebra;
+        zebrasEncontradas.forEach(function (z) { if (pref && z.name === pref) zebra = z; });
+        if (zebra) return zebra;
+        return bpRequisicao('GET', '/default?type=printer').then(function (t) {
+          try { zebra = JSON.parse(t); } catch (e) { zebra = null; }
+          if ((!zebra || !zebra.name) && zebrasEncontradas.length) zebra = zebrasEncontradas[0];
+          return zebra;
+        });
+      })
+      .then(function (z) {
+        if (!z || !z.name) { el('txtZebra').innerText = 'Nenhuma Zebra configurada'; pintarCard('cardZebra', 'erro'); return false; }
+        el('txtZebra').innerText = z.name; el('subZebra').innerText = (z.connection || '') + ' · ' + bpBase.replace(/^https?:\/\//, '');
+        pintarCard('cardZebra', 'ok'); return true;
+      })
+      .catch(function () { return tentar(); });
+  }
+  return tentar();
+}
+function enviarZebra(zpl) {
+  if (!zebra) return Promise.reject(new Error('Zebra não encontrada pelo Browser Print'));
+  return bpRequisicao('POST', '/write', JSON.stringify({ device: zebra, data: zpl }));
+}
+function gravarEscuridao() {
+  var esc = parseInt(el('cfgEsc').value, 10), vel = parseInt(el('cfgVel').value, 10);
+  if (isNaN(esc) || esc < 0 || esc > 30 || isNaN(vel) || vel < 2 || vel > 6) { alert('Escuridão 0 a 30 e velocidade 2 a 6.'); return; }
+  gravarLocal('lab_esc', String(esc)); gravarLocal('lab_vel', String(vel));
+  enviarZebra('~SD' + doisDig(esc) + '\n^XA\n^MD0\n^PR' + vel + ',' + vel + '\n^JUS\n^XZ\n')
+    .then(function () { log('OK', 'Escuridão ' + esc + ' e velocidade ' + vel + ' gravadas na Zebra'); })
+    .catch(function (e) { log('FALHA', 'Escuridão — ' + e.message); });
+}
+function testeZebra() {
+  enviarZebra('^XA^CI28^PW832^LL400^FO60,60^A0N,50,50^FDTESTE LABORATORIO^FS^FO60,140^A0N,36,36^FD' + new Date().toLocaleString('pt-BR') + '^FS^XZ')
+    .then(function () { log('OK', 'Teste Zebra'); }).catch(function (e) { log('FALHA', 'Teste Zebra — ' + e.message); });
+}
+
+/* ========================== MOLDE DA ETIQUETA ======================== */
+// Mesmo layout da macro do Excel (PRN invertido 180°, fonte A0I), agora em UTF-8 (^CI28).
+var LOGO_ZPL = ["^FO468,316^GFA,801,1333,31,:Z64:eJyFlM1q4zAUhY+ERIpXGqjxNnjpp1Cph24VkNBrZCCmW9NVHsN0ZfSUc67sTlqYtDeSI/98Prr3ngSA8sEo90sFZ8BjqzwYbWLgflzn6zzXlTPGtXBcWQWFSts0plRXOG7PH4/Qcqihew5ZK++cCQ4uONnBk6q328gXhLvSD/uE8T4ab/gV3KPy405Td9f+X2jO/nj3diufH7Tn+7SCa7/X1t9oG5gftJn0yGEwjhhrBczoeYGnj8bA+qagKcNbKXMBhrd1KAuGUgqk/hqHjC51Xc6nDHTPp5yjygw8ulZZrwuGVR5fKs3FqovQjBmzTT4FMUagNdJvLqKVAyKrZj0ounyhS1Nu2mo6TWGaUv7zCkwv0+v02nJeEKs2ynuZhxnNJ3q9Xtc9b4gf2df2FD+0WWlFbWMMaeriEw1dGvZpRb/VvcsRkvKJO88vESp1lU5K0b2s2brRa60asNN7v8WOkvdT1Q4EN+0E70nrvcjvVXshzXfpTZvTTh4T4+nCvNsz1EXoCxJdn4SeIdnOot2QXjd69zmLXrWVaFvR5gVL7WBskp0vkP7ondY7TY/zZ8a8g8piTKacO6F5dggqRSX0wLzLv5Rv9HyVhlM3qo9WJ1rTVm2phQzZNW7NqvR73y/oexlqypOSLlvOqTvDXuTsrMQ/iWnTbQLqGy3ewcODDJvEbZJ31ZaU5T+JO08nOo4+p1u+0E2lewl0tLWnrxPdnTJbfQg0fd66mGhylIXP86us0mpdfU5t/q1dId0ONtXCe2k1U44pbj+0EX8BVon1RA==:DC11^FS", "^FO415,28^GFA,37,900,4,:Z64:eJx7wMDA8GAY44JRPOSxxTDHAAYQbrE=:E72F^FS", "^FO247,208^GFA,33,72,24,:Z64:eJz7/x8LeMDAgE0YnzgAmFVBYg==:CFC0^FS"];
+
+// Tira ^ e ~ (comandos ZPL) e protege a barra invertida do ^FH
+function zt(v) { return String(v === undefined || v === null ? '' : v).replace(/[\^~]/g, ' ').replace(/\\/g, '\\5C'); }
+// Estreita a fonte quando o texto não cabe no espaço (em pontos), como na macro
+function larg(texto, wPadrao, espaco) {
+  var n = String(texto || '').length;
+  if (!n) return wPadrao;
+  var w = Math.floor(espaco / (n * 0.6));
+  return Math.max(10, Math.min(wPadrao, w));
+}
+function campoI(x, y, h, w, texto) {
+  if (texto === undefined || texto === null || String(texto) === '') return '';
+  return '^FT' + x + ',' + y + '^A0I,' + h + ',' + w + '^FH\\^FD' + zt(texto) + '^FS\n';
+}
+function deslocarZPL(zpl, dx, dy) {
+  if (!dx && !dy) return zpl;
+  return zpl.replace(/\^(FO|FT)(-?\d+),(-?\d+)/g, function (m, c, x, y) {
+    return '^' + c + Math.max(0, parseInt(x, 10) + dx) + ',' + Math.max(0, parseInt(y, 10) + dy);
+  });
+}
+
+function zplAmostra(d) {
+  var s = '^XA\n^MMT\n^PW832\n^LL400\n^LS0\n^LH0,0\n^CI28\n';
+  s += LOGO_ZPL.join('\n') + '\n';
+  // molduras e textos fixos
+  s += [
+    '^FO17,296^GB737,90,3^FS',
+    '^FO17,25^GB737,275,3^FS',
+    '^FT408,357^A0I,19,18^FH\\^FDDunax Lubrificantes Ltda^FS',
+    '^FT408,333^A0I,19,18^FH\\^FDNúcleo CIS, LOTE 02, QUADRA 03, S/N^FS',
+    '^FT408,309^A0I,19,18^FH\\^FDSão Gonçalo dos Campos - BA CEP:44330-000^FS',
+    '^FT749,187^A0I,28,28^FH\\^FDFabricante:^FS',
+    '^FT749,152^A0I,28,28^FH\\^FDPonto de Coleta:^FS',
+    '^FT749,117^A0I,28,28^FH\\^FDData de Coleta:^FS',
+    '^FT749,82^A0I,28,28^FH\\^FDHora:^FS',
+    '^FT749,47^A0I,28,28^FH\\^FDData de descarte:^FS',
+    '^FT408,217^A0I,23,23^FH\\^FDAMOSTRA:^FS',
+    '^FT408,188^A0I,23,23^FH\\^FDLINHA DE ENVASE:^FS',
+    '^FT408,159^A0I,23,23^FH\\^FDTURNO:^FS',
+    '^FT408,130^A0I,23,23^FH\\^FDResponsável pela Coleta:^FS',
+    '^FT408,101^A0I,23,23^FH\\^FDSituação:(  ) APROVADO(  )APR CONDIC.  ^FS',
+    '^FT408,72^A0I,23,23^FH\\^FD(  ) REPROVADO (RNC nº                    )^FS',
+    '^FT408,43^A0I,23,23^FH\\^FDResponsável pela Análise:^FS',
+    '^FT749,264^A0I,28,28^FH\\^FDProduto:^FS',
+    '^FT244,221^A0I,23,23^FH\\^FDNº LOTE:^FS',      // o "DB" agora vem no próprio lote (óleo base não tem DB)
+    '^FO18,26^GB401,228,3^FS',
+    '^FT749,222^A0I,28,28^FH\\^FDCódigo:^FS',
+    '^FO17,250^GB737,50,3^FS',
+    '^FO18,210^GB232,43,3^FS'
+  ].join('\n') + '\n';
+  // campos variáveis (mesmas posições da macro)
+  s += campoI(651, 264, 28, larg(d.produto, 28, 620), d.produto);
+  s += campoI(660, 219, 31, 30, d.codigo);
+  s += campoI(611, 187, 28, larg(d.fabricante, 28, 180), d.fabricante);
+  s += campoI(557, 152, 28, larg(d.ponto, 28, 130), d.ponto);
+  s += campoI(568, 117, 28, 28, d.dataColeta);
+  s += campoI(686, 80, 28, 28, d.hora);
+  s += campoI(538, 47, 28, 28, d.descarte);
+  s += campoI(148, 221, 23, larg(d.lote, 23, 126), d.lote);
+  s += campoI(303, 217, 23, 23, d.amostra);
+  s += campoI(228, 188, 23, larg(d.linha, 23, 205), d.linha);
+  s += campoI(336, 157, 25, 25, d.turno);
+  s += campoI(164, 126, 25, larg(d.respColeta, 25, 144), d.respColeta);
+  s += campoI(148, 42, 23, larg(d.respAnalise, 23, 128), d.respAnalise);
+  // situação: X na caixa certa (posições da macro)
+  if (d.situacao === 'REPROVADO') {
+    s += campoI(403, 72, 23, 23, 'X');
+    if (d.rnc) s += campoI(186, 72, 23, 23, d.rnc);
+  } else if (d.situacao === 'CONDIC') {
+    s += campoI(182, 100, 23, 23, 'X');
+  } else if (d.situacao) {
+    s += campoI(312, 100, 23, 23, 'X');
+  }
+  var qtd = Math.max(1, parseInt(d.qtd, 10) || 1);
+  s += '^PQ' + qtd + ',0,1,Y\n^XZ\n';
+  var c = cfg();
+  return deslocarZPL(s, c.dx, c.dy);
+}
+
+/* ============================ API (FR-LAB-01) ======================== */
+function api(params) {
+  params.token = TOKEN_API;
+  var q = [];
+  for (var k in params) if (params.hasOwnProperty(k)) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
+  return fetch(URL_API + '?' + q.join('&'), { method: 'GET', redirect: 'follow' })
+    .then(function (r) { return r.json(); })
+    .then(function (res) { if (!res || !res.ok) throw new Error(res && res.erro ? res.erro : 'Resposta inválida'); return res; });
+}
+
+function carregarFila(forcar) {
+  if (URL_API.indexOf('COLE_AQUI') === 0) { el('txtFila').innerText = 'Configure a URL_API'; pintarCard('cardFila', 'erro'); return; }
+  api({ etq: 'listar' }).then(function (res) {
+    fila = res;
+    el('txtFila').innerText = res.pendentes.length ? res.pendentes.length + ' pendente(s)' : 'Em dia';
+    el('subFila').innerText = 'Atualizado ' + horaAgora();
+    pintarCard('cardFila', res.pendentes.length ? 'aviso' : 'ok');
+    preencherListas(res.cadastro || {});
+    desenharLista();
+    // mantém a selecionada atualizada (se o analista não estiver editando)
+    if (selecionada && (!editando || forcar)) {
+      var nova = acharPorId(selecionada.id);
+      if (nova) abrir(nova.id, true);
+    }
+  }).catch(function (e) {
+    el('txtFila').innerText = 'Sem conexão com a FR-LAB-01'; el('subFila').innerText = e.message + ' · ' + horaAgora();
+    pintarCard('cardFila', 'erro');
+  });
+}
+
+function preencherListas(cad) {
+  function opts(id, arr) { el(id).innerHTML = (arr || []).map(function (t) { return '<option value="' + escHtml(t) + '">'; }).join(''); }
+  el('dlProdutos').innerHTML = (cad.produtos || []).map(function (p) { return '<option value="' + escHtml(p.nome) + '">' + escHtml(p.cod) + '</option>'; }).join('');
+  opts('dlColeta', cad.coleta); opts('dlAnalise', cad.analise); opts('dlLinhas', cad.linhas);
+}
+
+function acharPorId(id) {
+  var todas = fila.pendentes.concat(fila.recentes);
+  for (var i = 0; i < todas.length; i++) if (todas[i].id === id) return todas[i];
+  return null;
+}
+
+function tagOrigem(o) {
+  if (o === 'PRÉ-ENVASE') return '<span class="tag pre">PRÉ-ENVASE</span>';
+  if (o === 'ÓLEO BASE') return '<span class="tag base">ÓLEO BASE</span>';
+  return '<span class="tag man">' + escHtml(o || 'MANUAL') + '</span>';
+}
+function tagsImpressas(it) {
+  var f = {};
+  (it.impressoes || []).forEach(function (x) { f[x.amostra] = 1; });
+  return Object.keys(f).sort().map(function (a) { return '<span class="tag feita">✓ ' + escHtml(a || '-') + '</span>'; }).join('');
+}
+function desenharLista() {
+  function html(arr) {
+    if (!arr.length) return '<div class="vazio">Nenhuma</div>';
+    return arr.map(function (it) {
+      var d = it.dados || {};
+      return '<div class="item' + (selecionada && selecionada.id === it.id ? ' sel' : '') + '" onclick="abrir(\'' + it.id + '\')">' +
+        '<div class="l1">' + escHtml(d.lote || '(sem lote)') + ' · ' + escHtml(d.produto || '') + '</div>' +
+        '<div class="l2">' + tagOrigem(it.origem) + tagsImpressas(it) + ' ' + escHtml(it.criado) + '</div></div>';
+    }).join('');
+  }
+  el('listaPend').innerHTML = html(fila.pendentes);
+  el('listaRec').innerHTML = html(fila.recentes);
+  el('qtdPend').innerText = fila.pendentes.length;
+  el('qtdRec').innerText = fila.recentes.length;
+}
+
+/* ============================== EDITOR =============================== */
+var CAMPOS = { produto: 'fProduto', codigo: 'fCodigo', fabricante: 'fFabricante', lote: 'fLote', ponto: 'fPonto', linha: 'fLinha',
+               turno: 'fTurno', dataColeta: 'fData', hora: 'fHora', descarte: 'fDescarte', qtd: 'fQtd', respColeta: 'fColeta',
+               respAnalise: 'fAnalise', situacao: 'fSituacao', rnc: 'fRnc' };
+
+function abrir(id, silencioso) {
+  var it = acharPorId(id);
+  if (!it) return;
+  if (!silencioso && editando && selecionada && selecionada.id !== id && !confirm('Há alterações não salvas nesta etiqueta. Trocar mesmo assim?')) return;
+  selecionada = it;
+  editando = false;
+  var d = it.dados || {};
+  for (var k in CAMPOS) el(CAMPOS[k]).value = (d[k] === undefined || d[k] === null) ? '' : d[k];
+  if (!el('fSituacao').value) el('fSituacao').value = 'APROVADO';
+  if (!el('fQtd').value) el('fQtd').value = 1;
+  if (!el('fTurno').value) el('fTurno').value = lerLocal('lab_turno');
+  amostraEscolhida = d.amostra || '';
+  pintarAmostras();
+  el('edTitulo').innerText = (d.lote || '(sem lote)') + ' — ' + (d.produto || '');
+  el('edCorpo').style.display = 'block';
+  var pend = it.status === 'PENDENTE';
+  el('btConcluir').style.display = pend ? '' : 'none';
+  el('btDescartar').style.display = pend ? '' : 'none';
+  el('btReabrir').style.display = pend ? 'none' : '';
+  var av = [];
+  if (!d.respColeta) av.push('Digite o responsável pela coleta.');
+  if (it.origem === 'PRÉ-ENVASE') av.push('Imprima as 3 amostras (1 e 2 do batedor, 3 do envase). A etiqueta sai da fila sozinha quando as 3 forem impressas.');
+  el('edAviso').innerText = av.join(' ');
+  el('edAviso').style.display = av.length ? 'block' : 'none';
+  el('edImpressoes').innerHTML = (it.impressoes || []).length
+    ? 'Impressões: ' + it.impressoes.map(function (x) { return 'amostra ' + escHtml(x.amostra) + ' (' + x.qtd + 'x) ' + escHtml(x.em) + (x.quem ? ' · ' + escHtml(x.quem) : ''); }).join(' | ')
+    : 'Ainda não impressa.';
+  desenharLista();
+}
+
+function pintarAmostras() {
+  var feitas = {};
+  ((selecionada && selecionada.impressoes) || []).forEach(function (x) { feitas[x.amostra] = 1; });
+  ['1', '2', '3'].forEach(function (a) {
+    var b = el('am' + a);
+    b.className = amostraEscolhida === a ? 'on' : '';
+    var nome = a === '3' ? '3 · ENVASE' : a + ' · BATEDOR';
+    b.innerHTML = nome + (feitas[a] ? ' <span class="ok">✓</span>' : '');
+  });
+}
+
+function escolherAmostra(a) {
+  amostraEscolhida = a;
+  editando = true;
+  // ponto de coleta e linha padrão pela amostra (o analista pode trocar)
+  var ponto = el('fPonto').value.toUpperCase();
+  if (!ponto || ponto === 'BATEDOR' || ponto === 'TUBULAÇÃO') el('fPonto').value = a === '3' ? 'TUBULAÇÃO' : 'BATEDOR';
+  pintarAmostras();
+}
+
+function lerEditor() {
+  var d = {};
+  for (var k in CAMPOS) d[k] = String(el(CAMPOS[k]).value || '').trim();
+  d.amostra = amostraEscolhida;
+  d.qtd = Math.max(1, parseInt(d.qtd, 10) || 1);
+  ['fabricante', 'respColeta', 'respAnalise', 'lote', 'ponto'].forEach(function (k) { d[k] = d[k].toUpperCase(); });
+  return d;
+}
+
+function produtoMudou() {
+  editando = true;
+  var nome = el('fProduto').value.trim().toUpperCase();
+  (fila.cadastro.produtos || []).forEach(function (p) { if (p.nome.toUpperCase() === nome && p.cod) el('fCodigo').value = p.cod; });
+}
+function dataMudou() {
+  editando = true;
+  var m = el('fData').value.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (!m) return;
+  var ano = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+  var dt = new Date(ano, parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+  dt.setDate(dt.getDate() + 90);
+  el('fDescarte').value = doisDig(dt.getDate()) + '/' + doisDig(dt.getMonth() + 1) + '/' + doisDig(dt.getFullYear() % 100);
+}
+function situacaoMudou() { editando = true; }
+Object.keys(CAMPOS).forEach(function (k) { el(CAMPOS[k]).addEventListener('input', function () { editando = true; }); });
+
+function salvarSelecionada(avisar) {
+  if (!selecionada) return Promise.resolve();
+  var d = lerEditor();
+  return api({ etq: 'salvar', id: selecionada.id, dados: JSON.stringify(d) }).then(function () {
+    selecionada.dados = d; editando = false;
+    if (avisar) log('OK', 'Alterações salvas — ' + (d.lote || ''));
+  }).catch(function (e) { log('FALHA', 'Salvar — ' + e.message); throw e; });
+}
+
+function imprimirSelecionada() {
+  if (!selecionada) return;
+  var d = lerEditor();
+  if (!d.amostra) { alert('Escolha a amostra (1, 2 ou 3).'); return; }
+  if (!d.respColeta) { alert('Digite o responsável pela coleta.'); el('fColeta').focus(); return; }
+  if (!d.produto || !d.lote) { alert('Produto e lote são obrigatórios.'); return; }
+  if (d.situacao === 'REPROVADO' && !d.rnc && !confirm('Reprovado sem nº de RNC. Imprimir assim mesmo?')) return;
+  gravarLocal('lab_turno', d.turno);
+  var bt = el('btImprimir'); bt.disabled = true; bt.innerText = '⏳ Imprimindo...';
+  var id = selecionada.id;
+  salvarSelecionada(false)
+    .then(function () { return enviarZebra(zplAmostra(d)); })
+    .then(function () { return api({ etq: 'impresso', id: id, amostra: d.amostra, qtd: d.qtd, quem: d.respAnalise }); })
+    .then(function (r) {
+      log('OK', 'Impressa amostra ' + d.amostra + ' — ' + d.lote + ' · ' + d.produto + (r.concluida ? ' (concluída)' : ''));
+      amostraEscolhida = '';
+      editando = false;
+      carregarFila(true);
+    })
+    .catch(function (e) { log('FALHA', 'Impressão — ' + e.message); if (!zebra) procurarZebra(); })
+    .then(function () { bt.disabled = false; bt.innerText = '🖨 IMPRIMIR AMOSTRA'; });
+}
+
+function mudarStatus(acao) {
+  if (!selecionada) return;
+  var txt = { concluir: 'Tirar esta etiqueta da fila?', descartar: 'Descartar esta etiqueta? (não será impressa)', reabrir: 'Voltar esta etiqueta para a fila?' }[acao];
+  if (!confirm(txt)) return;
+  api({ etq: acao, id: selecionada.id }).then(function () {
+    log('OK', acao.toUpperCase() + ' — ' + ((selecionada.dados || {}).lote || ''));
+    if (acao !== 'reabrir') { selecionada = null; el('edCorpo').style.display = 'none'; el('edTitulo').innerText = 'Selecione uma etiqueta na lista ao lado'; el('edAviso').style.display = 'none'; }
+    editando = false;
+    carregarFila(true);
+  }).catch(function (e) { log('FALHA', acao + ' — ' + e.message); });
+}
+
+function novaEtiqueta() {
+  var origem = prompt('Tipo de etiqueta:\n1 = Óleo base\n2 = Produção (manual)\n3 = Outra', '1');
+  if (origem === null) return;
+  var o = origem === '1' ? 'ÓLEO BASE' : (origem === '2' ? 'MANUAL' : 'OUTRA');
+  var d = { origem: o, fabricante: o === 'MANUAL' ? 'DUNAX' : '', ponto: o === 'ÓLEO BASE' ? 'CARRETA' : '', amostra: o === 'ÓLEO BASE' ? '1' : '',
+            respAnalise: cfg().analista, situacao: 'APROVADO', qtd: 1 };
+  api({ etq: 'novo', dados: JSON.stringify(d) }).then(function (r) {
+    log('OK', 'Nova etiqueta criada (' + o + ')');
+    return api({ etq: 'listar' }).then(function (res) { fila = res; desenharLista(); abrir(r.id, true); editando = true; });
+  }).catch(function (e) { log('FALHA', 'Nova etiqueta — ' + e.message); });
+}
+
+/* =============================== INÍCIO ============================== */
+procurarZebra();
+carregarFila(true);
+setInterval(function () { carregarFila(false); }, INTERVALO_MS);
+setInterval(function () { if (!zebra) procurarZebra(); }, 60000);
+</script>
+</body>
+</html>
