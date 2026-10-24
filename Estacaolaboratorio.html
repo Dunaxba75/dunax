@@ -42,6 +42,12 @@
   .amostras button { flex:1; padding:12px 6px; border:2px solid #cbd5e1; background:#fff; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer; color:#2c3e50; }
   .amostras button.on { border-color:#2980b9; background:#eaf3fb; }
   .amostras button .ok { color:#27ae60; }
+  .layouts { display:flex; gap:8px; margin-bottom:12px; }
+  .layouts button { flex:1; padding:10px 6px; border:2px solid #cbd5e1; background:#fff; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer; color:#2c3e50; }
+  .layouts button.on { border-color:#8e44ad; background:#f4ecf8; color:#6c3483; }
+  .so-tanque { display:none; }
+  body.modo-tanque .so-amostra { display:none; }
+  body.modo-tanque .so-tanque { display:block; }
   .acoes { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
   .aviso { background:#fdf3e2; border-left:5px solid #e67e22; color:#7a4b00; padding:8px 12px; border-radius:6px; font-size:12.5px; margin-bottom:10px; display:none; }
   .config { background:#fff; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); padding:14px; margin-bottom:12px; display:none; border-left:6px solid #2980b9; }
@@ -57,7 +63,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ETIQUETAS DE AMOSTRA — LABORATÓRIO <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/10</span></div>
+  <div class="t">DULUB | ETIQUETAS DE AMOSTRA — LABORATÓRIO <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 24/10 · amostra + tanque</span></div>
   <div class="h" id="relogio">--:--:--</div>
 </div>
 
@@ -106,32 +112,39 @@
       <h3 id="edTitulo">Selecione uma etiqueta na lista ao lado</h3>
       <div class="aviso" id="edAviso"></div>
       <div id="edCorpo" style="display:none;">
+        <div class="layouts">
+          <button id="lyAmostra" onclick="escolherLayout('AMOSTRA')">🧪 ETIQUETA DE AMOSTRA</button>
+          <button id="lyTanque" onclick="escolherLayout('TANQUE')">🛢 ETIQUETA DE TANQUE</button>
+        </div>
         <div class="campos">
-          <div class="quatro"><label>Amostra</label>
+          <div class="dois so-tanque"><label>Produto resumido (sai grande na etiqueta)</label><input id="fResumo" placeholder="Ex.: 20W50"></div>
+          <div class="so-tanque"><label>Tanque</label><input id="fTanque" placeholder="Ex.: TP-2.2"></div>
+          <div class="so-tanque"><label>Nº Lote</label><input id="fLoteTq" oninput="el('fLote').value=this.value"></div>
+          <div class="quatro so-amostra"><label>Amostra</label>
             <div class="amostras" id="amostras">
               <button onclick="escolherAmostra('1')" id="am1">1 · BATEDOR</button>
               <button onclick="escolherAmostra('2')" id="am2">2 · BATEDOR</button>
               <button onclick="escolherAmostra('3')" id="am3">3 · ENVASE</button>
             </div></div>
-          <div class="dois"><label>Produto</label><input id="fProduto" list="dlProdutos" oninput="produtoMudou()"></div>
-          <div><label>Código</label><input id="fCodigo"></div>
-          <div><label>Fabricante</label><input id="fFabricante"></div>
-          <div><label>Nº Lote</label><input id="fLote"></div>
-          <div><label>Ponto de coleta</label><input id="fPonto" list="dlPontos"></div>
-          <div><label>Linha de envase</label><input id="fLinha" list="dlLinhas"></div>
-          <div><label>Turno</label><select id="fTurno"><option value=""></option><option>1</option><option>2</option><option>3</option></select></div>
-          <div><label>Data de coleta</label><input id="fData" placeholder="dd/mm/aa" oninput="dataMudou()"></div>
-          <div><label>Hora</label><input id="fHora" placeholder="hh:mm"></div>
-          <div><label>Data de descarte</label><input id="fDescarte" placeholder="dd/mm/aa"></div>
+          <div class="dois so-amostra"><label>Produto</label><input id="fProduto" list="dlProdutos" oninput="produtoMudou()"></div>
+          <div class="so-amostra"><label>Código</label><input id="fCodigo"></div>
+          <div class="so-amostra"><label>Fabricante</label><input id="fFabricante"></div>
+          <div class="so-amostra"><label>Nº Lote</label><input id="fLote"></div>
+          <div class="so-amostra"><label>Ponto de coleta</label><input id="fPonto" list="dlPontos"></div>
+          <div class="so-amostra"><label>Linha de envase</label><input id="fLinha" list="dlLinhas"></div>
+          <div class="so-amostra"><label>Turno</label><select id="fTurno"><option value=""></option><option>1</option><option>2</option><option>3</option></select></div>
+          <div class="so-amostra"><label>Data de coleta</label><input id="fData" placeholder="dd/mm/aa" oninput="dataMudou()"></div>
+          <div class="so-amostra"><label>Hora</label><input id="fHora" placeholder="hh:mm"></div>
+          <div class="so-amostra"><label>Data de descarte</label><input id="fDescarte" placeholder="dd/mm/aa"></div>
           <div><label>Qtd. de etiquetas</label><input id="fQtd" type="number" min="1" value="1"></div>
-          <div class="dois"><label>Responsável pela coleta</label><input id="fColeta" list="dlColeta" placeholder="Digite o nome"></div>
-          <div class="dois"><label>Responsável pela análise</label><input id="fAnalise" list="dlAnalise"></div>
-          <div class="dois"><label>Situação</label>
+          <div class="dois so-amostra"><label>Responsável pela coleta</label><input id="fColeta" list="dlColeta" placeholder="Digite o nome"></div>
+          <div class="dois so-amostra"><label>Responsável pela análise</label><input id="fAnalise" list="dlAnalise"></div>
+          <div class="dois so-amostra"><label>Situação</label>
             <select id="fSituacao" onchange="situacaoMudou()"><option value="APROVADO">( X ) APROVADO</option><option value="CONDIC">( X ) APROVADO CONDICIONAL</option><option value="REPROVADO">( X ) REPROVADO</option></select></div>
-          <div class="dois"><label>Nº RNC (se reprovado)</label><input id="fRnc"></div>
+          <div class="dois so-amostra"><label>Nº RNC (se reprovado)</label><input id="fRnc"></div>
         </div>
         <div class="acoes">
-          <button class="bt verde" id="btImprimir" onclick="imprimirSelecionada()">🖨 IMPRIMIR AMOSTRA</button>
+          <button class="bt verde" id="btImprimir" onclick="imprimirSelecionada()">🖨 IMPRIMIR</button>
           <button class="bt" onclick="salvarSelecionada(true)">💾 SALVAR ALTERAÇÕES</button>
           <button class="bt cinza" id="btConcluir" onclick="mudarStatus('concluir')">✔ CONCLUIR (TIRAR DA FILA)</button>
           <button class="bt vermelho" id="btDescartar" onclick="mudarStatus('descartar')">🗑 DESCARTAR</button>
@@ -355,6 +368,47 @@ function zplAmostra(d) {
   return deslocarZPL(s, c.dx, c.dy);
 }
 
+// ---------------------------------------------------------------------
+// ETIQUETA DE TANQUE — mesma etiqueta e mesma moldura externa da amostra
+// (o PRN de exemplo foi redimensionado para caber nas mesmas caixas).
+// Produto resumido grande e centralizado; tanque e lote centralizados.
+// A fonte diminui sozinha quando o texto não cabe na caixa.
+// ---------------------------------------------------------------------
+var LARG_CHAR = 0.6;   // largura média de cada caractere da fonte 0, em relação ao tamanho
+
+// Tamanho da fonte (altura = largura) que faz o texto caber em "largura" pontos, sem passar de "maximo"
+function fonteQueCabe(texto, largura, maximo, minimo) {
+  var n = Math.max(1, String(texto || '').length);
+  return Math.max(minimo || 20, Math.min(maximo, Math.floor(largura / (n * LARG_CHAR))));
+}
+
+// Texto centralizado numa caixa. xDir = borda direita (o texto invertido corre para a esquerda),
+// largura = largura útil, centroY = meio da caixa na altura
+function campoCentro(xDir, largura, centroY, tamanho, texto) {
+  var yBase = Math.round(centroY - tamanho * 0.36);
+  return '^FT' + xDir + ',' + yBase + '^A0I,' + tamanho + ',' + tamanho + '^FB' + largura + ',1,0,C^FH\\^FD' + zt(texto) + '^FS\n';
+}
+
+function zplTanque(d) {
+  var s = '^XA\n^MMT\n^PW832\n^LL400\n^LS0\n^LH0,0\n^CI28\n';
+  // caixas: produto em cima, tanque | lote embaixo (mesma moldura 737 x 361 da amostra)
+  s += '^FO17,138^GB737,248,8^FS\n';
+  s += '^FO17,25^GB737,121,8^FS\n';
+  s += '^FO374,28^GB0,112,8^FS\n';
+  // títulos
+  s += '^FT738,351^A0I,20,19^FH\\^FDPRODUTO:^FS\n';
+  s += '^FT738,110^A0I,20,19^FH\\^FDTANQUE:^FS\n';
+  s += '^FT366,113^A0I,20,19^FH\\^FDLOTE:^FS\n';
+  // valores (a fonte se ajusta ao tamanho do texto)
+  s += campoCentro(736, 702, 253, fonteQueCabe(d.resumo, 680, 211, 40), d.resumo);
+  s += campoCentro(736, 344, 77, fonteQueCabe(d.tanque, 330, 58, 24), d.tanque);
+  s += campoCentro(356, 322, 77, fonteQueCabe(d.lote, 310, 58, 24), d.lote);
+  var qtd = Math.max(1, parseInt(d.qtd, 10) || 1);
+  s += '^PQ' + qtd + ',0,1,Y\n^XZ\n';
+  var c = cfg();
+  return deslocarZPL(s, c.dx, c.dy);
+}
+
 /* ============================ API (FR-LAB-01) ======================== */
 function api(params) {
   params.token = TOKEN_API;
@@ -405,7 +459,7 @@ function tagOrigem(o) {
 function tagsImpressas(it) {
   var f = {};
   (it.impressoes || []).forEach(function (x) { f[x.amostra] = 1; });
-  return Object.keys(f).sort().map(function (a) { return '<span class="tag feita">✓ ' + escHtml(a || '-') + '</span>'; }).join('');
+  return Object.keys(f).sort().map(function (a) { return '<span class="tag feita">✓ ' + (a === 'TQ' ? 'TANQUE' : escHtml(a || '-')) + '</span>'; }).join('');
 }
 function desenharLista() {
   function html(arr) {
@@ -426,7 +480,26 @@ function desenharLista() {
 /* ============================== EDITOR =============================== */
 var CAMPOS = { produto: 'fProduto', codigo: 'fCodigo', fabricante: 'fFabricante', lote: 'fLote', ponto: 'fPonto', linha: 'fLinha',
                turno: 'fTurno', dataColeta: 'fData', hora: 'fHora', descarte: 'fDescarte', qtd: 'fQtd', respColeta: 'fColeta',
-               respAnalise: 'fAnalise', situacao: 'fSituacao', rnc: 'fRnc' };
+               respAnalise: 'fAnalise', situacao: 'fSituacao', rnc: 'fRnc', resumo: 'fResumo', tanque: 'fTanque' };
+var layoutEscolhido = 'AMOSTRA';
+
+// Nome curto para a etiqueta de tanque: usa a viscosidade (20W50, 15W40...) quando houver,
+// senão as duas primeiras palavras da fórmula. O analista pode trocar.
+function resumirProduto(nome) {
+  var n = String(nome || '').toUpperCase().replace(/^(DULUB|ECONOLINE)\s+/, '').replace(/\s+V\d+\s*$/, '').trim();
+  var visc = n.match(/\b\d{1,2}W\d{2,3}\b/);
+  if (visc) return visc[0];
+  return n.split(/\s+/).slice(0, 2).join(' ');
+}
+
+function escolherLayout(l) {
+  layoutEscolhido = l;
+  document.body.className = l === 'TANQUE' ? 'modo-tanque' : '';
+  el('lyAmostra').className = l === 'AMOSTRA' ? 'on' : '';
+  el('lyTanque').className = l === 'TANQUE' ? 'on' : '';
+  el('fLoteTq').value = el('fLote').value;
+  if (l === 'TANQUE' && !el('fResumo').value) el('fResumo').value = resumirProduto(el('fProduto').value);
+}
 
 function abrir(id, silencioso) {
   var it = acharPorId(id);
@@ -441,6 +514,7 @@ function abrir(id, silencioso) {
   if (!el('fTurno').value) el('fTurno').value = lerLocal('lab_turno');
   amostraEscolhida = d.amostra || '';
   pintarAmostras();
+  escolherLayout('AMOSTRA');
   el('edTitulo').innerText = (d.lote || '(sem lote)') + ' — ' + (d.produto || '');
   el('edCorpo').style.display = 'block';
   var pend = it.status === 'PENDENTE';
@@ -453,7 +527,7 @@ function abrir(id, silencioso) {
   el('edAviso').innerText = av.join(' ');
   el('edAviso').style.display = av.length ? 'block' : 'none';
   el('edImpressoes').innerHTML = (it.impressoes || []).length
-    ? 'Impressões: ' + it.impressoes.map(function (x) { return 'amostra ' + escHtml(x.amostra) + ' (' + x.qtd + 'x) ' + escHtml(x.em) + (x.quem ? ' · ' + escHtml(x.quem) : ''); }).join(' | ')
+    ? 'Impressões: ' + it.impressoes.map(function (x) { return (x.amostra === 'TQ' ? 'tanque' : 'amostra ' + escHtml(x.amostra)) + ' (' + x.qtd + 'x) ' + escHtml(x.em) + (x.quem ? ' · ' + escHtml(x.quem) : ''); }).join(' | ')
     : 'Ainda não impressa.';
   desenharLista();
 }
@@ -483,7 +557,7 @@ function lerEditor() {
   for (var k in CAMPOS) d[k] = String(el(CAMPOS[k]).value || '').trim();
   d.amostra = amostraEscolhida;
   d.qtd = Math.max(1, parseInt(d.qtd, 10) || 1);
-  ['fabricante', 'respColeta', 'respAnalise', 'lote', 'ponto'].forEach(function (k) { d[k] = d[k].toUpperCase(); });
+  ['fabricante', 'respColeta', 'respAnalise', 'lote', 'ponto', 'resumo', 'tanque'].forEach(function (k) { d[k] = d[k].toUpperCase(); });
   return d;
 }
 
@@ -516,24 +590,31 @@ function salvarSelecionada(avisar) {
 function imprimirSelecionada() {
   if (!selecionada) return;
   var d = lerEditor();
-  if (!d.amostra) { alert('Escolha a amostra (1, 2 ou 3).'); return; }
-  if (!d.respColeta) { alert('Digite o responsável pela coleta.'); el('fColeta').focus(); return; }
-  if (!d.produto || !d.lote) { alert('Produto e lote são obrigatórios.'); return; }
-  if (d.situacao === 'REPROVADO' && !d.rnc && !confirm('Reprovado sem nº de RNC. Imprimir assim mesmo?')) return;
+  var tanque = layoutEscolhido === 'TANQUE';
+  if (tanque) {
+    if (!d.resumo) { alert('Digite o produto resumido.'); el('fResumo').focus(); return; }
+    if (!d.tanque) { alert('Digite o tanque.'); el('fTanque').focus(); return; }
+    if (!d.lote) { alert('Digite o lote.'); el('fLoteTq').focus(); return; }
+  } else {
+    if (!d.amostra) { alert('Escolha a amostra (1, 2 ou 3).'); return; }
+    if (!d.respColeta) { alert('Digite o responsável pela coleta.'); el('fColeta').focus(); return; }
+    if (!d.produto || !d.lote) { alert('Produto e lote são obrigatórios.'); return; }
+    if (d.situacao === 'REPROVADO' && !d.rnc && !confirm('Reprovado sem nº de RNC. Imprimir assim mesmo?')) return;
+  }
   gravarLocal('lab_turno', d.turno);
   var bt = el('btImprimir'); bt.disabled = true; bt.innerText = '⏳ Imprimindo...';
   var id = selecionada.id;
   salvarSelecionada(false)
-    .then(function () { return enviarZebra(zplAmostra(d)); })
-    .then(function () { return api({ etq: 'impresso', id: id, amostra: d.amostra, qtd: d.qtd, quem: d.respAnalise }); })
+    .then(function () { return enviarZebra(tanque ? zplTanque(d) : zplAmostra(d)); })
+    .then(function () { return api({ etq: 'impresso', id: id, amostra: tanque ? 'TQ' : d.amostra, qtd: d.qtd, quem: d.respAnalise }); })
     .then(function (r) {
-      log('OK', 'Impressa amostra ' + d.amostra + ' — ' + d.lote + ' · ' + d.produto + (r.concluida ? ' (concluída)' : ''));
-      amostraEscolhida = '';
+      log('OK', (tanque ? 'Impressa etiqueta de TANQUE ' + d.tanque : 'Impressa amostra ' + d.amostra) + ' — ' + d.lote + ' · ' + (tanque ? d.resumo : d.produto) + (r.concluida ? ' (concluída)' : ''));
+      if (!tanque) amostraEscolhida = '';
       editando = false;
       carregarFila(true);
     })
     .catch(function (e) { log('FALHA', 'Impressão — ' + e.message); if (!zebra) procurarZebra(); })
-    .then(function () { bt.disabled = false; bt.innerText = '🖨 IMPRIMIR AMOSTRA'; });
+    .then(function () { bt.disabled = false; bt.innerText = '🖨 IMPRIMIR'; });
 }
 
 function mudarStatus(acao) {
@@ -549,14 +630,14 @@ function mudarStatus(acao) {
 }
 
 function novaEtiqueta() {
-  var origem = prompt('Tipo de etiqueta:\n1 = Óleo base\n2 = Produção (manual)\n3 = Outra', '1');
+  var origem = prompt('Tipo de etiqueta:\n1 = Óleo base\n2 = Produção (manual)\n3 = Outra\n4 = Tanque', '1');
   if (origem === null) return;
-  var o = origem === '1' ? 'ÓLEO BASE' : (origem === '2' ? 'MANUAL' : 'OUTRA');
+  var o = origem === '1' ? 'ÓLEO BASE' : (origem === '2' ? 'MANUAL' : (origem === '4' ? 'TANQUE' : 'OUTRA'));
   var d = { origem: o, fabricante: o === 'MANUAL' ? 'DUNAX' : '', ponto: o === 'ÓLEO BASE' ? 'CARRETA' : '', amostra: o === 'ÓLEO BASE' ? '1' : '',
             respAnalise: cfg().analista, situacao: 'APROVADO', qtd: 1 };
   api({ etq: 'novo', dados: JSON.stringify(d) }).then(function (r) {
     log('OK', 'Nova etiqueta criada (' + o + ')');
-    return api({ etq: 'listar' }).then(function (res) { fila = res; desenharLista(); abrir(r.id, true); editando = true; });
+    return api({ etq: 'listar' }).then(function (res) { fila = res; desenharLista(); abrir(r.id, true); editando = true; if (o === 'TANQUE') escolherLayout('TANQUE'); });
   }).catch(function (e) { log('FALHA', 'Nova etiqueta — ' + e.message); });
 }
 
