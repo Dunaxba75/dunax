@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recebimento de Aditivos — Etiqueta Zebra</title>
+<style>
+  :root{ --azul:#15233F; --azul2:#1F3A6E; --laranja:#F26B21; --verde:#1a7a44; --vermelho:#c0392b; --amarelo:#e67e22; --cinza:#eef1f5; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:18px;background:var(--cinza);color:#222;max-width:1100px;margin:0 auto;}
+  h1{font-size:21px;color:var(--azul);margin:0 0 2px;}
+  .sub{color:#666;font-size:13px;margin-bottom:16px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+  @media(max-width:860px){ .grid{grid-template-columns:1fr;} }
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  .cartao h2{font-size:14px;color:var(--azul2);margin:0 0 12px;text-transform:uppercase;letter-spacing:.5px;}
+  label{display:block;font-size:11.5px;font-weight:bold;color:#555;margin:10px 0 4px;}
+  input,select{width:100%;padding:11px;font-size:15px;border:1px solid #c7ccd4;border-radius:7px;background:#fff;}
+  .lin{display:flex;gap:12px;flex-wrap:wrap}
+  .lin>div{flex:1;min-width:120px}
+  button{padding:13px 16px;font-size:15px;font-weight:bold;border:none;border-radius:8px;cursor:pointer;}
+  .b-acao{width:100%;font-size:17px;padding:16px;margin-top:14px;color:#fff;background:var(--laranja);}
+  .b-azul{background:var(--azul2);color:#fff;}
+  .b-cinza{background:#e4e8ef;color:#333;}
+  button:disabled{opacity:.5;cursor:default;}
+  .status{padding:11px 13px;border-radius:8px;margin-top:12px;font-size:14px;line-height:1.45;white-space:pre-line;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;} .warn{background:#fef3e0;color:#8a5a12;}
+  .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+  .prev{background:#fff;border:1px solid #e3e7ee;border-radius:8px;padding:12px;display:flex;justify-content:center;overflow:hidden;}
+  .etq{width:100%;max-width:250px;aspect-ratio:831/1614;border:1px solid #bbb;border-radius:6px;overflow:hidden;background:#fff;}
+  .etq.deitada{max-width:100%;aspect-ratio:1614/831;}
+  .hist{font-size:12.5px;border-top:1px solid #eef;padding:8px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .hist .t{flex:1;min-width:0}
+  .hist input{width:56px;padding:6px;font-size:13px;text-align:center}
+  details{margin-top:4px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul2)}
+  textarea{width:100%;height:150px;font-family:monospace;font-size:11px;border:1px solid #c7ccd4;border-radius:7px;padding:8px}
+  .mini{font-size:11px;color:#888;margin-top:3px}
+  .calc{font-size:13px;font-weight:bold;color:var(--azul2);margin-top:10px;min-height:16px}
+  .fila{margin-top:12px;background:#14357A;color:#fff;border-radius:10px;padding:14px;text-align:center}
+  .fila .k{font-size:11px;text-transform:uppercase;opacity:.8;font-weight:bold;letter-spacing:1px}
+  .fila .v{font-size:34px;font-weight:bold;line-height:1.1;margin-top:4px}
+  .rem{margin-top:8px;background:#fef3e0;color:#8a5a12;border-left:5px solid var(--amarelo);border-radius:6px;padding:10px;font-size:13px;font-weight:bold}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+  <h1>Recebimento de Aditivos</h1>
+  <div class="sub">Gera os códigos, dá entrada no estoque, indica a fila e imprime a etiqueta direto na Zebra — DUNAX.</div>
+
+  <div class="grid">
+    <!-- ======== FORMULÁRIO ======== -->
+    <div>
+      <div class="cartao">
+        <h2>1. Dados do recebimento</h2>
+        <div class="lin">
+          <div><label>Fornecedor</label><select id="forn" onchange="formMudou()"><option value="">Aguarde…</option></select></div>
+        </div>
+        <label>Produto aditivo</label>
+        <input id="buscaProd" placeholder="🔍 Digite para filtrar a lista…" oninput="filtrarProdutos()" autocomplete="off" style="margin-bottom:8px">
+        <select id="prod" onchange="formMudou()"><option value="">Aguarde…</option></select>
+        <div class="lin">
+          <div><label>Nota fiscal</label><input id="nf" oninput="formMudou()"></div>
+          <div><label>Lote do fornecedor</label><input id="lote" oninput="formMudou()"></div>
+        </div>
+        <div class="lin">
+          <div><label>Massa total NF</label><input id="total" inputmode="decimal" placeholder="Ex: 4000" oninput="calcular();formMudou()"></div>
+          <div><label>Tamanho embalagem</label><input id="tam" inputmode="decimal" placeholder="200 (tambor) / 1000 (IBC)" oninput="calcular();formMudou()"></div>
+        </div>
+        <div class="lin">
+          <div><label>Validade (opcional)</label><input id="val" type="date" oninput="formMudou()"></div>
+          <div style="flex:0 0 140px"><label>Unidade</label><select id="unid" onchange="formMudou()"><option value="KG">KG</option><option value="L">L</option></select></div>
+        </div>
+        <div class="calc" id="calcInfo"></div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-weight:bold;color:#333;cursor:pointer">
+          <input type="checkbox" id="imprimir" checked style="width:auto" onchange="trocarBotao()"> Imprimir etiquetas agora
+        </label>
+      </div>
+
+      <button class="b-acao" id="btnAcao" onclick="confirmar()">🖨️ DAR ENTRADA E IMPRIMIR ETIQUETAS</button>
+      <div id="status" class="status info">Preencha os dados e confirme.</div>
+      <div id="resEnd"></div>
+
+      <div class="cartao" style="margin-top:16px">
+        <h2>Últimos recebimentos (sessão)</h2>
+        <div id="hist"><div style="color:#aaa">(nenhum ainda)</div></div>
+      </div>
+
+      <div class="cartao">
+        <h2>Reimprimir etiquetas</h2>
+        <label>Bipe a etiqueta (código de barras ou QR)</label>
+        <input id="rpBipe" placeholder="AB1234" onkeydown="if(event.key==='Enter'){event.preventDefault();reimprimirBipe();}">
+        <div class="lin">
+          <div><label>Ou busque (código, produto, lote, fabricante, NF)</label>
+            <input id="rpBusca" placeholder="digite e Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();buscar();}"></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><button class="b-azul" onclick="buscar()">🔍 Buscar</button></div>
+        </div>
+        <div id="rpStatus" class="mini" style="margin-top:6px"></div>
+        <div id="rpLista"></div>
+      </div>
+    </div>
+
+    <!-- ======== PRÉVIA + IMPRESSORA ======== -->
+    <div>
+      <div class="cartao">
+        <h2>Prévia da etiqueta (104 × 202 mm)</h2>
+        <div class="prev"><div class="etq" id="etq"></div></div>
+        <div class="lin" style="margin-top:8px;align-items:center">
+          <div class="mini" id="prevInfo">Layout TEMPLATE ADITIVOS REV6 (o mesmo da macro).</div>
+          <div style="flex:0 0 auto"><button class="b-cinza" style="padding:7px 12px;font-size:12px" onclick="girar()">↻ Girar prévia</button></div>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h2>Impressora & conexões</h2>
+        <div style="margin-bottom:8px">Browser Print: <span id="pBP" class="pill n">—</span>
+          &nbsp; API Aditivos: <span id="pApi" class="pill n">—</span></div>
+        <div class="lin">
+          <div><button class="b-azul" style="width:100%" onclick="detectar()">🔌 Detectar impressora</button></div>
+          <div><button class="b-cinza" style="width:100%" onclick="imprimirTeste()">Imprimir teste</button></div>
+        </div>
+        <div id="impInfo" class="mini">Abra esta página no PC onde o Zebra Browser Print está instalado.</div>
+
+        <details style="margin-top:12px">
+          <summary>Configuração</summary>
+          <label>URL da API (/exec da planilha de aditivos)</label>
+          <input id="cApi" placeholder="https://script.google.com/macros/s/…/exec">
+          <label>Host do Browser Print</label>
+          <input id="cBp" value="http://127.0.0.1:9100">
+          <div class="lin">
+            <div><label>Escuridão (0–30)</label><input id="cDark" type="number" min="0" max="30"></div>
+            <div><label>Velocidade (2–5 pol/s)</label><input id="cSpeed" type="number" min="2" max="5"></div>
+          </div>
+          <div class="lin">
+            <div><label>Deslocar X (dots, + direita)</label><input id="cDx" type="number"></div>
+            <div><label>Deslocar Y (dots, + desce)</label><input id="cDy" type="number"></div>
+          </div>
+          <div class="lin">
+            <div><label>QR X</label><input id="cQx" type="number"></div>
+            <div><label>QR Y</label><input id="cQy" type="number"></div>
+          </div>
+          <div class="mini">Padrões da macro: escuridão 18 · velocidade 3 · deslocamento 0/0 · QR 309/1100. 8 dots = 1 mm.</div>
+          <button class="b-azul" style="width:100%;margin-top:10px" onclick="salvarConfig()">Salvar</button>
+        </details>
+
+        <details style="margin-top:8px">
+          <summary>Ver ZPL gerado</summary>
+          <textarea id="zplOut" readonly></textarea>
+          <button class="b-cinza" style="width:100%;margin-top:8px" onclick="copiarZPL()">Copiar ZPL</button>
+        </details>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===================== estado / config ===================== */
+var printer=null, historico=[], BUSCA=[], ultimaEtq=null, deitada=false, enviando=false;
+var PADRAO={ dark:18, speed:3, dx:0, dy:0, qx:309, qy:1100 };
+function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+function val(id){ var el=document.getElementById(id); return el?(el.value||'').trim():''; }
+function num(k){ var v=ls('adt_'+k); var n=parseInt(v,10); return (v===null||v===''||isNaN(n))?PADRAO[k]:n; }
+function cfg(){ return { dark:Math.max(0,Math.min(30,num('dark'))), speed:Math.max(2,Math.min(5,num('speed'))),
+                         dx:num('dx'), dy:num('dy'), qx:num('qx'), qy:num('qy') }; }
+function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
+function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
+function apiUrl(){ return (ls('adt_api')||'').trim().split('?')[0].split('#')[0]; }
+function bpHost(){ return (ls('adt_bp')||'http://127.0.0.1:9100').replace(/\/+$/,''); }
+
+window.onload=function(){
+  document.getElementById('cApi').value=apiUrl();
+  document.getElementById('cBp').value=bpHost();
+  var c=cfg(); ['dark','speed','dx','dy','qx','qy'].forEach(function(k){
+    document.getElementById('c'+k.charAt(0).toUpperCase()+k.slice(1)).value=c[k]; });
+  pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'n':'r');
+  if(apiUrl()) carregarListas();
+  detectar(true); trocarBotao(); calcular(); desenhar();
+};
+function salvarConfig(){
+  ls('adt_api', val('cApi')); ls('adt_bp', val('cBp'));
+  ls('adt_dark', val('cDark')); ls('adt_speed', val('cSpeed'));
+  ls('adt_dx', val('cDx')); ls('adt_dy', val('cDy')); ls('adt_qx', val('cQx')); ls('adt_qy', val('cQy'));
+  pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'n':'r');
+  if(apiUrl()) carregarListas();
+  desenhar();
+  setStatus('Configuração salva.','ok');
+}
+function trocarBotao(){
+  var imp=document.getElementById('imprimir').checked;
+  document.getElementById('btnAcao').textContent = imp ? '🖨️ DAR ENTRADA E IMPRIMIR ETIQUETAS' : '✅ DAR ENTRADA (sem imprimir)';
+}
+
+/* ===================== API ===================== */
+async function getAPI(params){
+  var r=await fetch(apiUrl()+'?'+params,{method:'GET'});
+  var t=await r.text();
+  try{ return JSON.parse(t); }
+  catch(e){ var m=t.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
+            return {ok:false, erro:'A API não retornou JSON (HTTP '+r.status+'). Confira a URL e se a implantação está como "Qualquer pessoa". '+(m||'')}; }
+}
+function q(o){ return Object.keys(o).map(function(k){ return k+'='+encodeURIComponent(o[k]==null?'':o[k]); }).join('&'); }
+async function carregarListas(){
+  try{
+    var d=await getAPI('acaoadt=listas');
+    if(!(d&&d.ok)){ pill('pApi','erro','r'); setStatus('API: '+((d&&d.erro)||'falha'),'erro'); return; }
+    pill('pApi','conectada','g');
+    FORNECEDORES=d.fornecedores||[]; PRODUTOS=d.aditivos||[];
+    preencherSelect('forn', FORNECEDORES);
+    filtrarProdutos();
+  }catch(e){ pill('pApi','sem conexão','r'); }
+}
+var FORNECEDORES=[], PRODUTOS=[];
+/** Lista de seleção igual à da tela antiga; mantém o que já estava escolhido. */
+function preencherSelect(id, itens){
+  var sel=document.getElementById(id), atual=sel.value;
+  sel.innerHTML='<option value="">-- Selecione ('+itens.length+') --</option>'
+    + itens.map(function(i){ return '<option value="'+esc(i)+'">'+esc(i)+'</option>'; }).join('');
+  if(atual && itens.indexOf(atual)>-1) sel.value=atual;
+}
+function filtrarProdutos(){
+  var b=val('buscaProd').toUpperCase();
+  var lista=PRODUTOS.filter(function(p){ return !b || String(p).toUpperCase().indexOf(b)>-1; });
+  preencherSelect('prod', lista);
+  if(lista.length===1){ document.getElementById('prod').value=lista[0]; formMudou(); }
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+/* ===================== cálculo das embalagens ===================== */
+function numBR(s){
+  s=String(s||'').trim().replace(/\s/g,''); if(!s) return NaN;
+  if(s.indexOf(',')>-1) s=s.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,'');
+  return parseFloat(s);
+}
+function fmtBR(n){ return (Math.round(n*1000)/1000).toLocaleString('pt-BR',{maximumFractionDigits:3}); }
+function calcular(){
+  var t=numBR(val('total')), e=numBR(val('tam')), el=document.getElementById('calcInfo');
+  if(!(t>0)||!(e>0)){ el.textContent=''; return; }
+  var n=Math.ceil(t/e), ult=t-(n-1)*e;
+  el.textContent='→ '+n+' etiqueta(s) de '+fmtBR(e)+(Math.abs(ult-e)>1e-9?(' (a última com '+fmtBR(ult)+')'):'');
+}
+
+/* ===================== Browser Print ===================== */
+async function detectar(silent){
+  try{
+    var dev=null;
+    try{ var r=await fetch(bpHost()+'/default?type=printer'); if(r.ok){ var j=await r.json(); if(j && (j.uid||j.name)) dev=j; } }catch(e){}
+    if(!dev){ var ra=await fetch(bpHost()+'/available'); if(ra.ok){ var a=await ra.json(); var list=(a&&a.printer)||[]; if(list.length) dev=list[0]; } }
+    if(!dev) throw new Error('nenhuma impressora');
+    printer=dev; pill('pBP','conectada','g');
+    document.getElementById('impInfo').textContent='Impressora: '+(printer.name||printer.uid||'padrão');
+    if(!silent) setStatus('Impressora detectada.','ok');
+  }catch(e){ printer=null; pill('pBP','sem conexão','r');
+    document.getElementById('impInfo').textContent='Browser Print não respondeu em '+bpHost()+'. Abra a página no PC com o Zebra Browser Print aberto.';
+    if(!silent) setStatus('Não achei o Browser Print em '+bpHost()+'.','erro'); }
+}
+async function enviarZPL(zpl){
+  if(!printer) await detectar(true);
+  if(!printer) throw new Error('Impressora não conectada.');
+  function tenta(){ return fetch(bpHost()+'/write',{method:'POST',
+     headers:{'Content-Type':'text/plain;charset=UTF-8'},
+     body:JSON.stringify({device:printer, data:zpl})}); }
+  var r=await tenta();
+  if(r.status>=500){ await detectar(true); r=await tenta(); }
+  if(!r.ok){ var t=''; try{ t=await r.text(); }catch(e){}
+    throw new Error('Browser Print HTTP '+r.status+(t?(' — '+String(t).replace(/\s+/g,' ').slice(0,180)):'')); }
+}
+async function imprimirTeste(){
+  try{ await enviarZPL('^XA^CI0^FO60,60^A0N,60,60^FDTESTE ADITIVOS^FS^FO60,160^BQN,2,6^FDLA,TESTE^FS^XZ'); setStatus('Teste enviado.','ok'); }
+  catch(e){ setStatus('Falha no teste: '+e.message,'erro'); }
+}
+
+/* =====================================================================
+   ZPL — TEMPLATE ADITIVOS REV6
+   Tradução direta da macro VBA (EtiquetaLinha / MontarZPL). Não mexer no
+   layout aqui sem mexer também na macro: as duas têm que sair iguais.
+   ===================================================================== */
+var CRLF='\r\n';
+var TAB850='FFADBD9CCFBEDDF5F9B8A6AEAAF0A9EEF8F1FDFCEFE6F4FAF7FBA7AFACABF3A8B7B5B6C78E8F9280D490D2D3DED6D7D8D1A5E3E0E2E5999E9DEBE9EA9AEDE8E185A083C6848691878A8288898DA18C8BD0A495A293E494F69B97A39681ECE798';
+
+// acentos em hexadecimal da página 850 (^CI0 + ^FH\) e proteção de ^ ~ \
+function zplTexto(s){
+  var out='', str=String(s==null?'':s);
+  for(var i=0;i<str.length;i++){
+    var ch=str.charAt(i), c=str.charCodeAt(i);
+    if(c===92||c===94||c===126) out+='\\'+c.toString(16).toUpperCase();
+    else if(c>=32&&c<=126) out+=ch;
+    else if(c>=160&&c<=255) out+='\\'+TAB850.substr((c-160)*2,2);
+    else if(c===8211||c===8212) out+='-';
+    else if(c===8216||c===8217) out+="'";
+    else if(c===8220||c===8221) out+='"';
+    else out+='?';
+  }
+  return out;
+}
+// estreita a fonte quando o texto não cabe no espaço disponível (em dots)
+function larguraFonte(texto, wPadrao, espaco){
+  var n=String(texto).length; if(n===0) return wPadrao;
+  var w=Math.floor(espaco/(n*0.6));
+  if(w>wPadrao) w=wPadrao; if(w<10) w=10;
+  return w;
+}
+function campoR(x,y,h,w,texto){
+  if(texto==='' || texto==null) return '';
+  return '^FT'+x+','+y+'^A0R,'+h+','+w+'^FH\\^FD'+zplTexto(texto)+'^FS'+CRLF;
+}
+function campoQR(x,y,dados){
+  if(!dados) return '';
+  var n=dados.length, mag = n<=78?8 : n<=106?7 : n<=134?6 : 5;
+  return '^FO'+x+','+y+'^BQN,2,'+mag+'^FH\\^FDLA,'+zplTexto(dados)+'^FS'+CRLF;
+}
+// Code 128 igual ao Designer: letras em B e o final numérico (par, >= 4) em C. AB1599 → >:AB>51599
+function dadosCode128(cod){
+  cod=String(cod||'').trim();
+  var n=cod.length, i=n;
+  while(i>=1 && /[0-9]/.test(cod.charAt(i-1))) i--;
+  var dig=n-i; if(dig%2===1) dig--;
+  if(dig>=4){
+    var pre=cod.slice(0,n-dig);
+    return pre==='' ? '>;'+cod.slice(n-dig) : '>:'+zplTexto(pre)+'>5'+cod.slice(n-dig);
+  }
+  return '>:'+zplTexto(cod);
+}
+// número como o Excel pt-BR mostra (182,5 / 200)
+function txtNum(v){
+  if(v===null||v===undefined||v==='') return '';
+  if(typeof v==='number') return String(v).replace('.',',');
+  return String(v).trim();
+}
+function textoQR(d){
+  if(d.qr) return String(d.qr);
+  var t='COD='+d.codigo+';PROD='+d.produto+';LOTE='+d.lote+';FAB='+d.fabricante;
+  if(d.validade && d.validade!=='-') t+=';VAL='+String(d.validade).replace(/\//g,'-');
+  return t+';QTD='+txtNum(d.estoqueInicial)+';NF='+d.nf;
+}
+function deslocar(s,dx,dy){
+  if(!dx && !dy) return s;
+  return s.replace(/\^(FO|FT)(\d+),(\d+)/g, function(m,t,x,y){ return '^'+t+(+x+dx)+','+(+y+dy); });
+}
+function cabecalhoZPL(c){
+  return 'CT~~CD,~CC^~CT~'+CRLF+
+         '^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR'+c.speed+','+c.speed+
+         '~SD'+('0'+c.dark).slice(-2)+'^JUS^LRN^CI0^XZ'+CRLF;
+}
+/* ---- Geometria dos ajustes REV7 (dots; 8 dots = 1 mm) ---- */
+var GEO={
+  dtrY:36,  dtrW:344,                      // "DT RECEBIMENTO:" centrado em y 36..380 (quadro 28..386)
+  nfY:962,  nfRotX:284, nfNumX:200, nfLarg:205,   // quadro da NF: x 176..322, y 950..1180
+  bcBase:600, bcTopo:803,                  // barras de x 600 até 803 (borda em 808)
+  bcY0:122, bcY1:790,                      // comprimento disponível (depois do "COD", antes da linha y=797)
+  bcFonte:36, bcByMax:8
+};
+
+/* ---- Code 128 (só para medir e desenhar a prévia; quem codifica na impressão é a Zebra) ---- */
+var C128=('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232').split(' ');
+var C128_STOP='2331112';
+/** Valores Code 128 a partir dos dados ZPL (>: início B · >; início C · >5 troca para C), com o dígito verificador. */
+function valores128(dados){
+  var v=[], modo='', i=0;
+  while(i<dados.length){
+    var t=dados.substr(i,2);
+    if(t==='>:'){ v.push(104); modo='B'; i+=2; continue; }
+    if(t==='>;'){ v.push(105); modo='C'; i+=2; continue; }
+    if(t==='>5'){ v.push(99);  modo='C'; i+=2; continue; }
+    if(modo==='C'){ v.push(parseInt(dados.substr(i,2),10)); i+=2; }
+    else { v.push(dados.charCodeAt(i)-32); i++; }
+  }
+  var soma=v[0]; for(var k=1;k<v.length;k++) soma+=k*v[k];
+  v.push(soma%103);
+  return v;
+}
+function geometriaBarras(codigo){
+  var dados=dadosCode128(codigo);
+  var modulos=valores128(dados).length*11+13;
+  var disp=GEO.bcY1-GEO.bcY0;
+  var by=Math.max(2,Math.min(GEO.bcByMax,Math.floor(disp/modulos)));
+  return { dados:dados, by:by, h:GEO.bcTopo-GEO.bcBase, modulos:modulos,
+           y0:GEO.bcY0+Math.floor((disp-modulos*by)/2) };
+}
+
+function etiquetaZPL(d, qtd, c){
+  var produto=String(d.produto||''), fab=String(d.fabricante||''), lote=String(d.lote||''), nf=String(d.nf||'');
+  var validade=String(d.validade||'').trim(); if(!validade) validade='-';
+  var receb=String(d.receb||''), mR=receb.match(/\d{2}\/\d{2}\/\d{4}/);
+  if(mR) receb=mR[0];                       // REV7: só dd/MM/aaaa, sem a hora
+  var estoque=txtNum(d.estoqueInicial); if(estoque==='') estoque=txtNum(d.estoqueAtual);
+  var s='^XA'+CRLF+'^MMT'+CRLF+'^PW831'+CRLF+'^LL1614'+CRLF+'^LS0'+CRLF+'^LH0,0'+CRLF+'^CI0'+CRLF;
+
+  // ---- molduras, gráficos e textos fixos (PRN TEMPLATE ADITIVOS REV6 + ajustes REV7)
+  s+='^FT608,105^A0N,68,68^FH\\^FDCOD^FS'+CRLF;
+  s+='^FT469,75^A0R,62,61^FH\\^FDVALIDADE:^FS'+CRLF;
+  s+='^FT234,44^A0R,56,56^FH\\^FDFABRICANTE:^FS'+CRLF;
+  s+='^FO8,20^GB168,1586,8^FS'+CRLF;
+  // REV7: "ESTOQUE INICIAL:" passava da linha y=1180 → começa no início do quadro (y 805) e um pouco mais estreito
+  s+='^FT589,812^A0R,62,39^FH\\^FDESTOQUE INICIAL:^FS'+CRLF;
+  s+='^FT725,833^A0R,62,61^FH\\^FDLOTE:^FS'+CRLF;
+  // REV7: o rótulo "NF" foi para dentro do quadro da NF (ver campos variáveis)
+  // REV7: "DT RECEBIMENTO:" centralizado dentro do quadro (antes começava em y=0, colado na borda)
+  s+='^FT367,'+GEO.dtrY+'^A0R,51,38^FB'+GEO.dtrW+',1,13,C^FH\\^FDDT RECEBIMENTO:\\5C&^FS'+CRLF;
+  s+='^FO8,20^GB807,1586,7^FS'+CRLF;
+  s+='^FO176,386^GB371,0,8^FS'+CRLF;
+  s+='^FO436,797^GB374,0,8^FS'+CRLF;
+  s+='^FO684,797^GFA,53,3212,4,:Z64:eJztw0ENAAAIBKBrZjSNZjRb+IKNnqRVVVUf1yYHxUUgCw==:87BC^FS'+CRLF;
+  s+='^FO531,21^GFA,109,4652,4,:Z64:eJxjkH/AwIAL2x8YxcMF1zeM4uGA/zOM4mGCGf+N4uGCmf+M4uGC2X+M4uGC+T+M4uGC8XVVRvHQwgPdHRrFo93KUUxa1xIAjhmGsg==:F5A0^FS'+CRLF;
+  s+='^FO431,20^GB0,1168,8^FS'+CRLF;
+  s+='^FO322,20^GB0,1168,8^FS'+CRLF;
+  s+='^FO688,1039^GB122,0,8^FS'+CRLF;
+  s+='^FO175,1180^GB514,0,8^FS'+CRLF;
+  s+='^FO167,942^GB155,0,8^FS'+CRLF;
+
+  // ---- campos variáveis (texto girado 90 graus - fonte A0R)
+  s+=campoR(54,47,121,larguraFonte(produto,122,1530),produto);
+  s+=campoR(236,448,62,larguraFonte(fab,61,480),fab);
+  s+=campoR(469,421,62,larguraFonte(validade,61,360),validade);
+  s+=campoR(469,1087,62,61,String(d.unidade||''));
+  s+=campoR(725,1134,62,larguraFonte(lote,61,460),lote);
+  // REV7: quadro da NF = x 176..322 · y 950..1180 → rótulo pequeno em cima, número embaixo
+  s+='^FT'+GEO.nfRotX+','+GEO.nfY+'^A0R,30,30^FH\\^FDNF^FS'+CRLF;
+  s+=campoR(GEO.nfNumX,GEO.nfY,62,larguraFonte(nf,61,GEO.nfLarg),nf);
+  s+=campoR(452,828,79,larguraFonte(estoque,79,240),estoque);
+  s+=campoR(359,414,68,larguraFonte(receb,68,780),receb);
+
+  // ---- QR Code (texto da coluna I; se vazia, monta com os dados)
+  s+=campoQR(c.qx,c.qy,textoQR(Object.assign({},d,{validade:validade})));
+
+  // ---- código de barras (Code 128) com o código interno
+  // REV7: ocupa o quadro dele (x 550..807 · y 120..790, depois do "COD"): barra mais
+  // alta e módulo calculado pelo tamanho do código, centralizado no comprimento.
+  var bc=geometriaBarras(d.codigo);
+  s+='^BY'+bc.by+',3,'+bc.h+'^FT'+GEO.bcBase+','+bc.y0+'^A0R,'+GEO.bcFonte+','+GEO.bcFonte+'^BCR,,Y,N'+CRLF;
+  s+='^FH\\^FD'+bc.dados+'^FS'+CRLF;
+
+  s+='^PQ'+Math.max(1,qtd||1)+',0,1,Y'+CRLF+'^XZ'+CRLF;
+  return deslocar(s,c.dx,c.dy);
+}
+/** Um trabalho de impressão com várias etiquetas (como a macro: cabeçalho uma vez só). */
+function montarJob(lista){
+  var c=cfg(), s=cabecalhoZPL(c);
+  lista.forEach(function(it){ s+=etiquetaZPL(it.d, it.copias||1, c); });
+  return s;
+}
+
+/* ===================== prévia (desenha o próprio ZPL) ===================== */
+var GFA_CACHE={};
+async function gfaParaImagem(dados){
+  if(GFA_CACHE[dados]!==undefined) return GFA_CACHE[dados];
+  GFA_CACHE[dados]=null;
+  try{
+    var m=dados.match(/^GFA,(\d+),(\d+),(\d+),:Z64:([^:]+)/); if(!m || !window.DecompressionStream) return null;
+    var total=+m[2], porLinha=+m[3];
+    var bin=Uint8Array.from(atob(m[4]), function(ch){ return ch.charCodeAt(0); });
+    var ds=new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate'));
+    var bytes=new Uint8Array(await new Response(ds).arrayBuffer());
+    var w=porLinha*8, h=Math.floor(total/porLinha);
+    var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    var ctx=cv.getContext('2d'), img=ctx.createImageData(w,h);
+    for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+      var b=bytes[y*porLinha+(x>>3)], on=(b>>(7-(x&7)))&1, k=(y*w+x)*4;
+      img.data[k]=img.data[k+1]=img.data[k+2]=0; img.data[k+3]=on?255:0;
+    }
+    ctx.putImageData(img,0,0);
+    GFA_CACHE[dados]={url:cv.toDataURL(), w:w, h:h};
+  }catch(e){ GFA_CACHE[dados]=null; }
+  return GFA_CACHE[dados];
+}
+function decodHex(s){ return s.replace(/\\([0-9A-F]{2})/gi,function(m,h){ var c=parseInt(h,16);
+  if(c===0x5C) return '\\'; if(c<128) return String.fromCharCode(c);
+  var i=TAB850.indexOf(h.toUpperCase()); return (i>-1&&i%2===0)? String.fromCharCode(160+i/2) : '?'; }); }
+async function zplToSVG(zpl){
+  var out='', blocos=zpl.split('^XA'); var corpo=blocos[blocos.length-1];
+  var by=6;
+  var campos=corpo.split('^FS');
+  for(var i=0;i<campos.length;i++){
+    var f=campos[i];
+    var mBY=f.match(/\^BY(\d+)/); if(mBY) by=+mBY[1];
+    var mP=f.match(/\^F([OT])(-?\d+),(-?\d+)/); if(!mP) continue;
+    var x=+mP[2], y=+mP[3];
+    var mGB=f.match(/\^GB(\d+),(\d+),(\d+)/);
+    if(mGB){ var w=+mGB[1],h=+mGB[2],t=+mGB[3];
+      if(w<=t||h<=t) out+='<rect x="'+x+'" y="'+y+'" width="'+Math.max(w,t)+'" height="'+Math.max(h,t)+'" fill="#000"/>';
+      else out+='<rect x="'+(x+t/2)+'" y="'+(y+t/2)+'" width="'+(w-t)+'" height="'+(h-t)+'" fill="none" stroke="#000" stroke-width="'+t+'"/>';
+      continue; }
+    var mG=f.match(/\^(GFA,[^\^]+)/);
+    if(mG){ var im=await gfaParaImagem(mG[1]);
+      if(im) out+='<image href="'+im.url+'" x="'+x+'" y="'+y+'" width="'+im.w+'" height="'+im.h+'" style="image-rendering:pixelated"/>';
+      continue; }
+    if(f.indexOf('^BQ')>-1){
+      // A Zebra desenha o ^BQ ~160 dots abaixo do ^FO (por isso a macro usa QR_Y = 1100).
+      // A prévia aplica o mesmo deslocamento para mostrar onde o QR sai no papel.
+      var mm=f.match(/\^BQN,\d+,(\d+)/), mag=mm?+mm[1]:6, yq=y+PREV_QR_DY;
+      var fdq=f.match(/\^FD(?:LA,)?([\s\S]*)$/), dq=fdq?decodHex(fdq[1]):'';
+      var mat=matrizQR(dq);
+      if(mat){
+        var nm=mat.length, rects='';
+        for(var r0=0;r0<nm;r0++) for(var c0=0;c0<nm;c0++) if(mat[r0][c0])
+          rects+='<rect x="'+(x+c0*mag)+'" y="'+(yq+r0*mag)+'" width="'+mag+'" height="'+mag+'"/>';
+        out+='<g fill="#000" shape-rendering="crispEdges">'+rects+'</g>';
+      } else {
+        var s=33*mag;
+        out+='<rect x="'+x+'" y="'+yq+'" width="'+s+'" height="'+s+'" fill="#fff" stroke="#000" stroke-width="'+(mag*2)+'"/>'
+            +'<text x="'+(x+s/2)+'" y="'+(yq+s/2+12)+'" font-size="34" text-anchor="middle" font-family="Arial">QR</text>';
+      }
+      continue; }
+    if(f.indexOf('^BCR')>-1){
+      var mb=f.match(/\^BY(\d+),\d+,(\d+)/), byb=mb?+mb[1]:by, hb=mb?+mb[2]:168;
+      var fdb=f.match(/\^FD(.*)$/), dados=fdb?fdb[1]:'';
+      var vals=valores128(dados), pad=vals.map(function(n){ return C128[n]; }).join('')+C128_STOP;
+      var yy=y, preto=true, bars='';
+      for(var q=0;q<pad.length;q++){ var wq=(+pad.charAt(q))*byb;
+        if(preto) bars+='<rect x="'+x+'" y="'+yy+'" width="'+hb+'" height="'+wq+'"/>';
+        yy+=wq; preto=!preto; }
+      var mfa=f.match(/\^A0R,(\d+),(\d+)/), hf=mfa?+mfa[1]:36;
+      var leg=dados.replace(/>[:;5]/g,'');
+      out+='<g fill="#000" shape-rendering="crispEdges">'+bars+'</g>'
+          +'<text font-size="'+Math.round(hf*0.92)+'" font-weight="bold" font-family="Arial Narrow, Arial, sans-serif" text-anchor="middle"'
+          +' transform="translate('+(x-8-Math.round(hf*0.75))+' '+((y+yy)/2)+') rotate(90)">'+svgEsc(leg)+'</text>';
+      continue; }
+    var mFD=f.match(/\^FD([\s\S]*)$/); if(!mFD) continue;
+    var mA=f.match(/\^A0([NR]),(\d+),(\d+)/); var ori=mA?mA[1]:'N', hh=mA?+mA[2]:30, ww=mA?+mA[3]:30;
+    var txt=decodHex(mFD[1]).replace(/\\&/g,'');
+    var fs=Math.round(hh*0.92), tl=Math.max(1,Math.round(txt.length*ww*0.56));
+    var mFB=f.match(/\^FB(\d+),\d+,\d+,C/);
+    var attrs=' font-size="'+fs+'" font-weight="bold" font-family="Arial Narrow, Arial, sans-serif" textLength="'+tl+'" lengthAdjust="spacingAndGlyphs"';
+    if(ori==='R'){
+      var yy0=y; if(mFB){ yy0=y+(+mFB[1]-tl)/2; }
+      out+='<text'+attrs+' transform="translate('+x+' '+yy0+') rotate(90)">'+svgEsc(txt)+'</text>';
+    } else {
+      out+='<text'+attrs+' x="'+x+'" y="'+y+'">'+svgEsc(txt)+'</text>';
+    }
+  }
+  return '<svg viewBox="0 0 831 1614" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">'
+       +'<rect width="831" height="1614" fill="#fff"/>'+out+'</svg>';
+}
+var PREV_QR_DY=160;
+/** Matriz do QR (modelo 2, correção L — o mesmo "LA," da etiqueta). null se a biblioteca não carregou. */
+function matrizQR(txt){
+  try{
+    if(typeof qrcode!=='function' || !txt) return null;
+    var qr=qrcode(0,'L'); qr.addData(txt,'Byte'); qr.make();
+    var n=qr.getModuleCount(), m=[];
+    for(var r=0;r<n;r++){ m.push([]); for(var c=0;c<n;c++) m[r].push(qr.isDark(r,c)); }
+    return m;
+  }catch(e){ return null; }
+}
+function svgEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function girar(){ deitada=!deitada; desenhar(); }
+
+function dadosDoForm(){
+  var t=numBR(val('total')), e=numBR(val('tam'));
+  var q1=(t>0&&e>0)? Math.min(t,e) : '';
+  var v=val('val'), vb='-';
+  if(v){ var p=v.split('-'); vb=p[2]+'/'+p[1]+'/'+p[0]; }
+  var agora=new Date(), z=function(n){ return ('0'+n).slice(-2); };
+  return { codigo:'AB0000', produto:val('prod')||'PRODUTO', lote:val('lote'), fabricante:val('forn'),
+           validade:vb, unidade:val('unid'), estoqueInicial:q1, nf:val('nf'),
+           receb:z(agora.getDate())+'/'+z(agora.getMonth()+1)+'/'+agora.getFullYear()+' '+z(agora.getHours())+':'+z(agora.getMinutes())+':'+z(agora.getSeconds()),
+           qr:'' };
+}
+var desenhando=0;
+function formMudou(){ ultimaEtq=null; desenhar(); }
+async function desenhar(etq){
+  var d = (etq!==undefined) ? etq : ultimaEtq;
+  var base = d || dadosDoForm();
+  var zpl=cabecalhoZPL(cfg())+etiquetaZPL(base,1,cfg());
+  document.getElementById('zplOut').value=zpl;
+  document.getElementById('prevInfo').textContent = d ? ('Prévia de '+d.codigo+' — layout REV6 (o mesmo da macro).')
+                                                      : 'Prévia com os dados do formulário — layout REV6 (o mesmo da macro).';
+  var meu=++desenhando, svg=await zplToSVG(zpl);
+  if(meu!==desenhando) return;
+  var box=document.getElementById('etq');
+  box.classList.toggle('deitada',deitada);
+  box.innerHTML = deitada
+    ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><div style="width:51.5%;aspect-ratio:831/1614;transform:rotate(-90deg)">'+svg+'</div></div>'
+    : svg;
+}
+function copiarZPL(){ var t=document.getElementById('zplOut'); t.select(); try{document.execCommand('copy'); setStatus('ZPL copiado.','ok');}catch(e){} }
+
+/* ===================== recebimento ===================== */
+async function confirmar(){
+  if(enviando) return;
+  if(!apiUrl()){ setStatus('Configure a URL da API primeiro (Impressora & conexões → Configuração).','erro'); return; }
+  var dados={ fornecedor:val('forn'), produto:val('prod'), nf:val('nf'), lote:val('lote'),
+              volume:val('total'), tamanho:val('tam'), validade:val('val'), unidade:val('unid') };
+  if(!dados.fornecedor||!dados.produto||!dados.volume||!dados.tamanho){ setStatus('Preencha fornecedor, produto, massa total e tamanho da embalagem.','erro'); return; }
+  var t=numBR(dados.volume), e=numBR(dados.tamanho);
+  if(!(t>0)||!(e>0)){ setStatus('Massa total ou tamanho da embalagem inválido.','erro'); return; }
+  var n=Math.ceil(t/e);
+  if(!confirm('Dar entrada de '+fmtBR(t)+' '+dados.unidade+' de '+dados.produto+'\nem '+n+' etiqueta(s)?')) return;
+
+  var imprimir=document.getElementById('imprimir').checked;
+  if(imprimir && !printer){ await detectar(true);
+    if(!printer && !confirm('A impressora não respondeu. Dar entrada mesmo assim e imprimir depois pela reimpressão?')) return; }
+
+  enviando=true; document.getElementById('btnAcao').disabled=true;
+  setStatus('Registrando entrada…','info'); document.getElementById('resEnd').innerHTML='';
+  try{
+    dados.req=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+    var r=await getAPI(q(Object.assign({acaoadt:'receber'},dados)));
+    if(!(r&&r.ok)){ setStatus('🚨 '+((r&&r.erro)||'Falha ao registrar.'),'erro'); return; }
+    var etqs=r.etiquetas||[], msgImp='';
+    var job=montarJob(etqs.map(function(x){ return {d:x, copias:1}; }));
+    document.getElementById('zplOut').value=job;
+    if(imprimir && printer){
+      try{
+        await enviarZPL(job);
+        var m=await getAPI(q({acaoadt:'impresso', cods:etqs.map(function(x){return x.codigo;}).join(',')}));
+        msgImp='\n🖨️ '+etqs.length+' etiqueta(s) enviada(s) para a Zebra.'+(m&&m.ok?'':' (não consegui marcar como IMPRESSO na planilha)');
+      }catch(err){ msgImp='\n⚠️ A entrada foi gravada, mas a impressão falhou: '+err.message+'\nUse "Reimprimir" abaixo.'; }
+    } else msgImp='\nSem impressão agora — use a reimpressão quando quiser.';
+    setStatus((r.repetido?'(pedido repetido — nada foi gravado em dobro)\n':'')+r.mensagem.split('\n\n📍')[0]+msgImp, msgImp.indexOf('⚠️')>-1?'warn':'ok');
+    mostrarEnderecamento(r);
+    ultimaEtq=etqs[0]||null; desenhar(ultimaEtq);
+    historico.unshift({t:new Date(), txt:dados.produto+' · '+etqs.length+' etiq. ('+(etqs[0]?etqs[0].codigo:'')+(etqs.length>1?' a '+etqs[etqs.length-1].codigo:'')+')'+(r.filas&&r.filas.length?' → '+r.filas.join(', '):''), etqs:etqs});
+    renderHist();
+    ['nf','lote','total','tam','val'].forEach(function(id){ document.getElementById(id).value=''; });
+    calcular();
+  }catch(err){ setStatus('Falha de conexão: '+err.message,'erro'); }
+  finally{ enviando=false; document.getElementById('btnAcao').disabled=false; }
+}
+function mostrarEnderecamento(r){
+  var h='';
+  if(r.filas&&r.filas.length) h+='<div class="fila"><div class="k">📍 Guardar na(s) fila(s)</div><div class="v">'+r.filas.join(' · ')+'</div>'
+       +'<div style="font-size:11px;opacity:.8;margin-top:4px">O endereço exato de cada volume aparece na tela de Armazenagem ao bipar.</div></div>';
+  (r.remanejar||[]).forEach(function(x){ h+='<div class="rem">⚠️ Sem fila vazia — REMANEJAMENTO: '+esc(x)+'</div>'; });
+  var sem=(r.mensagem||'').match(/⛔[^\n]*/); if(sem) h+='<div class="rem" style="border-left-color:#c0392b;color:#c0392b;background:#fce8e6">'+esc(sem[0])+'</div>';
+  document.getElementById('resEnd').innerHTML=h;
+}
+function renderHist(){
+  var box=document.getElementById('hist');
+  if(!historico.length){ box.innerHTML='<div style="color:#aaa">(nenhum ainda)</div>'; return; }
+  box.innerHTML='';
+  historico.slice(0,12).forEach(function(h){
+    var hh=('0'+h.t.getHours()).slice(-2)+':'+('0'+h.t.getMinutes()).slice(-2);
+    var div=document.createElement('div'); div.className='hist';
+    div.innerHTML='<span class="t">'+esc(h.txt)+' <span style="color:#999">('+hh+')</span></span>';
+    var b=document.createElement('button'); b.className='b-cinza'; b.style.cssText='padding:6px 12px;font-size:12px'; b.textContent='Reimprimir';
+    b.onclick=function(){ imprimirLista(h.etqs.map(function(x){ return {d:x,copias:1}; }), document.getElementById('status')); };
+    div.appendChild(b); box.appendChild(div);
+  });
+}
+
+/* ===================== reimpressão ===================== */
+function rpSet(t){ document.getElementById('rpStatus').textContent=t||''; }
+async function imprimirLista(lista, alvo){
+  try{
+    await enviarZPL(montarJob(lista));
+    var n=lista.reduce(function(a,x){ return a+(x.copias||1); },0);
+    var txt='✔ '+n+' etiqueta(s) reimpressa(s).';
+    if(alvo && alvo.id==='status') setStatus(txt,'ok'); else rpSet(txt);
+  }catch(e){ var t='Falha ao imprimir: '+e.message; if(alvo && alvo.id==='status') setStatus(t,'erro'); else rpSet(t); }
+}
+async function reimprimirBipe(){
+  var cod=val('rpBipe'); document.getElementById('rpBipe').value='';
+  if(!cod) return;
+  if(!apiUrl()){ rpSet('Configure a URL da API primeiro.'); return; }
+  rpSet('Buscando '+cod+'…');
+  try{
+    var d=await getAPI(q({acaoadt:'etiqueta', cod:cod}));
+    if(!(d&&d.ok)){ rpSet((d&&d.erro)||'Não encontrada.'); return; }
+    ultimaEtq=d.etiqueta; desenhar(ultimaEtq);
+    BUSCA=[d.etiqueta]; renderBusca();
+    await imprimirLista([{d:d.etiqueta,copias:1}]);
+  }catch(e){ rpSet('Falha: '+e.message); }
+}
+async function buscar(){
+  if(!apiUrl()){ rpSet('Configure a URL da API primeiro.'); return; }
+  rpSet('Buscando…');
+  try{
+    var d=await getAPI(q({acaoadt:'buscar', q:val('rpBusca'), limit:50}));
+    BUSCA=(d&&d.ok&&d.etiquetas)?d.etiquetas:[];
+    renderBusca();
+    rpSet(BUSCA.length? (BUSCA.length+' etiqueta(s) — as mais recentes primeiro.') : ((d&&d.erro)||'Nada encontrado.'));
+  }catch(e){ rpSet('Falha na busca: '+e.message); }
+}
+function renderBusca(){
+  var box=document.getElementById('rpLista'); box.innerHTML='';
+  if(BUSCA.length>1){
+    var tudo=document.createElement('button'); tudo.className='b-azul'; tudo.style.cssText='width:100%;margin:8px 0;padding:10px;font-size:13px';
+    tudo.textContent='🖨️ Reimprimir todas da lista ('+BUSCA.length+')';
+    tudo.onclick=function(){ if(confirm('Reimprimir '+BUSCA.length+' etiqueta(s)?')) imprimirLista(BUSCA.map(function(x){ return {d:x,copias:1}; })); };
+    box.appendChild(tudo);
+  }
+  BUSCA.forEach(function(r){
+    var div=document.createElement('div'); div.className='hist';
+    div.innerHTML='<span class="t"><b>'+esc(r.codigo)+'</b> · '+esc(r.produto)+' · '+esc(txtNum(r.estoqueInicial))+' '+esc(r.unidade)
+      +'<br><span style="color:#999">lote '+esc(r.lote||'—')+' · NF '+esc(r.nf||'—')+' · '+esc(String(r.receb).slice(0,10))
+      +(r.flag?' · '+esc(r.flag):'')+'</span></span>';
+    var c=document.createElement('input'); c.type='number'; c.min=1; c.value=1; c.title='cópias';
+    var v=document.createElement('button'); v.className='b-cinza'; v.style.cssText='padding:6px 10px;font-size:12px'; v.textContent='👁';
+    v.title='Ver na prévia'; v.onclick=function(){ ultimaEtq=r; desenhar(r); };
+    var b=document.createElement('button'); b.className='b-cinza'; b.style.cssText='padding:6px 12px;font-size:12px'; b.textContent='Reimprimir';
+    b.onclick=function(){ ultimaEtq=r; desenhar(r); imprimirLista([{d:r,copias:Math.max(1,parseInt(c.value,10)||1)}]); };
+    div.appendChild(c); div.appendChild(v); div.appendChild(b); box.appendChild(div);
+  });
+}
+</script>
+</body>
+</html>
