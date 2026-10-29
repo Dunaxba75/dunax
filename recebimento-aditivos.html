@@ -345,9 +345,10 @@ function cabecalhoZPL(c){
 var GEO={
   dtrY:36,  dtrW:344,                      // "DT RECEBIMENTO:" centrado em y 36..380 (quadro 28..386)
   nfY:962,  nfRotX:284, nfNumX:200, nfLarg:205,   // quadro da NF: x 176..322, y 950..1180
-  bcBase:600, bcTopo:803,                  // barras de x 600 até 803 (borda em 808)
+  bcBase:630, bcTopo:803,                  // barras de x 630 até 803 = 173 dots (15% menor que 203)
+  bcTxtX:568, bcTxtH:64,                   // código impresso embaixo das barras, centralizado (glifo ~568..616; quadro começa em 550)
   bcY0:122, bcY1:790,                      // comprimento disponível (depois do "COD", antes da linha y=797)
-  bcFonte:36, bcByMax:8
+  bcByMax:8
 };
 
 /* ---- Code 128 (só para medir e desenhar a prévia; quem codifica na impressão é a Zebra) ---- */
@@ -426,8 +427,12 @@ function etiquetaZPL(d, qtd, c){
   // REV7: ocupa o quadro dele (x 550..807 · y 120..790, depois do "COD"): barra mais
   // alta e módulo calculado pelo tamanho do código, centralizado no comprimento.
   var bc=geometriaBarras(d.codigo);
-  s+='^BY'+bc.by+',3,'+bc.h+'^FT'+GEO.bcBase+','+bc.y0+'^A0R,'+GEO.bcFonte+','+GEO.bcFonte+'^BCR,,Y,N'+CRLF;
+  // REV7b: barras 15% mais baixas e o texto do código impresso como campo próprio
+  // (^BC sem linha de interpretação), maior e centralizado no comprimento das barras.
+  s+='^BY'+bc.by+',3,'+bc.h+'^FT'+GEO.bcBase+','+bc.y0+'^BCR,,N,N'+CRLF;
   s+='^FH\\^FD'+bc.dados+'^FS'+CRLF;
+  s+='^FT'+GEO.bcTxtX+','+bc.y0+'^A0R,'+GEO.bcTxtH+','+GEO.bcTxtH+'^FB'+(bc.modulos*bc.by)+',1,0,C^FH\\^FD'
+    +zplTexto(String(d.codigo||'').trim().toUpperCase())+'^FS'+CRLF;
 
   s+='^PQ'+Math.max(1,qtd||1)+',0,1,Y'+CRLF+'^XZ'+CRLF;
   return deslocar(s,c.dx,c.dy);
@@ -508,11 +513,12 @@ async function zplToSVG(zpl){
       for(var q=0;q<pad.length;q++){ var wq=(+pad.charAt(q))*byb;
         if(preto) bars+='<rect x="'+x+'" y="'+yy+'" width="'+hb+'" height="'+wq+'"/>';
         yy+=wq; preto=!preto; }
-      var mfa=f.match(/\^A0R,(\d+),(\d+)/), hf=mfa?+mfa[1]:36;
-      var leg=dados.replace(/>[:;5]/g,'');
-      out+='<g fill="#000" shape-rendering="crispEdges">'+bars+'</g>'
-          +'<text font-size="'+Math.round(hf*0.92)+'" font-weight="bold" font-family="Arial Narrow, Arial, sans-serif" text-anchor="middle"'
-          +' transform="translate('+(x-8-Math.round(hf*0.75))+' '+((y+yy)/2)+') rotate(90)">'+svgEsc(leg)+'</text>';
+      out+='<g fill="#000" shape-rendering="crispEdges">'+bars+'</g>';
+      if(/\^BCR,[^,]*,Y/.test(f)){                       // linha de interpretação da própria Zebra
+        var mfa=f.match(/\^A0R,(\d+),(\d+)/), hf=mfa?+mfa[1]:36, leg=dados.replace(/>[:;5]/g,'');
+        out+='<text font-size="'+Math.round(hf*0.92)+'" font-weight="bold" font-family="Arial Narrow, Arial, sans-serif" text-anchor="middle"'
+            +' transform="translate('+(x-8-Math.round(hf*0.75))+' '+((y+yy)/2)+') rotate(90)">'+svgEsc(leg)+'</text>';
+      }
       continue; }
     var mFD=f.match(/\^FD([\s\S]*)$/); if(!mFD) continue;
     var mA=f.match(/\^A0([NR]),(\d+),(\d+)/); var ori=mA?mA[1]:'N', hh=mA?+mA[2]:30, ww=mA?+mA[3]:30;
