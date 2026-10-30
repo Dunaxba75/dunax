@@ -42,7 +42,6 @@
   .fila .v{font-size:34px;font-weight:bold;line-height:1.1;margin-top:4px}
   .rem{margin-top:8px;background:#fef3e0;color:#8a5a12;border-left:5px solid var(--amarelo);border-radius:6px;padding:10px;font-size:13px;font-weight:bold}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 </head>
 <body>
   <h1>Recebimento de Aditivos</h1>
@@ -86,31 +85,10 @@
         <div id="hist"><div style="color:#aaa">(nenhum ainda)</div></div>
       </div>
 
-      <div class="cartao">
-        <h2>Reimprimir etiquetas</h2>
-        <label>Bipe a etiqueta (código de barras ou QR)</label>
-        <input id="rpBipe" placeholder="AB1234" onkeydown="if(event.key==='Enter'){event.preventDefault();reimprimirBipe();}">
-        <div class="lin">
-          <div><label>Ou busque (código, produto, lote, fabricante, NF)</label>
-            <input id="rpBusca" placeholder="digite e Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();buscar();}"></div>
-          <div style="flex:0 0 auto;align-self:flex-end"><button class="b-azul" onclick="buscar()">🔍 Buscar</button></div>
-        </div>
-        <div id="rpStatus" class="mini" style="margin-top:6px"></div>
-        <div id="rpLista"></div>
-      </div>
     </div>
 
-    <!-- ======== PRÉVIA + IMPRESSORA ======== -->
+    <!-- ======== IMPRESSORA ======== -->
     <div>
-      <div class="cartao">
-        <h2>Prévia da etiqueta (104 × 202 mm)</h2>
-        <div class="prev"><div class="etq" id="etq"></div></div>
-        <div class="lin" style="margin-top:8px;align-items:center">
-          <div class="mini" id="prevInfo">Layout TEMPLATE ADITIVOS REV6 (o mesmo da macro).</div>
-          <div style="flex:0 0 auto"><button class="b-cinza" style="padding:7px 12px;font-size:12px" onclick="girar()">↻ Girar prévia</button></div>
-        </div>
-      </div>
-
       <div class="cartao">
         <h2>Impressora & conexões</h2>
         <div style="margin-bottom:8px">Browser Print: <span id="pBP" class="pill n">—</span>
@@ -149,6 +127,18 @@
           <button class="b-cinza" style="width:100%;margin-top:8px" onclick="copiarZPL()">Copiar ZPL</button>
         </details>
       </div>
+      <div class="cartao">
+        <h2>Reimprimir etiquetas</h2>
+        <label>Bipe a etiqueta (código de barras ou QR)</label>
+        <input id="rpBipe" placeholder="AB1234" onkeydown="if(event.key==='Enter'){event.preventDefault();reimprimirBipe();}">
+        <div class="lin">
+          <div><label>Ou busque (código, produto, lote, fabricante, NF)</label>
+            <input id="rpBusca" placeholder="digite e Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();buscar();}"></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><button class="b-azul" onclick="buscar()">🔍 Buscar</button></div>
+        </div>
+        <div id="rpStatus" class="mini" style="margin-top:6px"></div>
+        <div id="rpLista"></div>
+      </div>
     </div>
   </div>
 
@@ -163,7 +153,10 @@ function cfg(){ return { dark:Math.max(0,Math.min(30,num('dark'))), speed:Math.m
                          dx:num('dx'), dy:num('dy'), qx:num('qx'), qy:num('qy') }; }
 function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
 function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
-function apiUrl(){ return (ls('adt_api')||'').trim().split('?')[0].split('#')[0]; }
+// API padrão (app da Web da planilha FR-LAB-01). Funciona em qualquer aparelho sem configurar;
+// se alguém salvar outra URL em Configuração, ela tem prioridade.
+var API_PADRAO='https://script.google.com/macros/s/AKfycbzgwo2nePzkK_oSJFC4id4OUM3vnnqt3S8mogAVGzKIICoQxk4AzcQqyHDA7g0At09llA/exec';
+function apiUrl(){ return ((ls('adt_api')||'').trim()||API_PADRAO).split('?')[0].split('#')[0]; }
 function bpHost(){ return (ls('adt_bp')||'http://127.0.0.1:9100').replace(/\/+$/,''); }
 
 window.onload=function(){
@@ -568,6 +561,7 @@ async function desenhar(etq){
   var base = d || dadosDoForm();
   var zpl=cabecalhoZPL(cfg())+etiquetaZPL(base,1,cfg());
   document.getElementById('zplOut').value=zpl;
+  if(!document.getElementById('etq')) return;          // prévia retirada do layout: só atualiza o ZPL
   document.getElementById('prevInfo').textContent = d ? ('Prévia de '+d.codigo+' — layout REV6 (o mesmo da macro).')
                                                       : 'Prévia com os dados do formulário — layout REV6 (o mesmo da macro).';
   var meu=++desenhando, svg=await zplToSVG(zpl);
@@ -695,7 +689,7 @@ function renderBusca(){
     v.title='Ver na prévia'; v.onclick=function(){ ultimaEtq=r; desenhar(r); };
     var b=document.createElement('button'); b.className='b-cinza'; b.style.cssText='padding:6px 12px;font-size:12px'; b.textContent='Reimprimir';
     b.onclick=function(){ ultimaEtq=r; desenhar(r); imprimirLista([{d:r,copias:Math.max(1,parseInt(c.value,10)||1)}]); };
-    div.appendChild(c); div.appendChild(v); div.appendChild(b); box.appendChild(div);
+    div.appendChild(c); div.appendChild(b); box.appendChild(div);
   });
 }
 </script>
