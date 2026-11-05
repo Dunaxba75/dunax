@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Desmembrar Pallet — DUNAX Plásticos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{ --azul:#1F3A6E; --laranja:#F26B21; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#eef1f5;color:#222;max-width:520px;margin:0 auto;}
+  h1{font-size:19px;color:var(--azul);margin:0 0 2px;}
+  .sub{color:#666;font-size:12.5px;margin-bottom:14px;}
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  label{display:block;font-size:12px;font-weight:bold;color:#555;margin:6px 0 4px;}
+  input{width:100%;padding:12px;font-size:16px;border:1px solid #c7ccd4;border-radius:7px;}
+  button{padding:14px 16px;font-size:16px;font-weight:bold;border:none;border-radius:8px;background:var(--laranja);color:#fff;cursor:pointer;width:100%;margin-top:10px;}
+  button.sec{background:var(--azul);font-size:14px;}
+  button.big{padding:18px;font-size:18px;}
+  button:disabled{background:#aab;}
+  .status{padding:12px 13px;border-radius:7px;margin-top:12px;font-size:14px;line-height:1.4;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;}
+  #reader{width:100%;margin-top:12px;border:1px solid #e3e7ee;border-radius:8px;overflow:hidden;display:none}
+  details{margin-top:6px;font-size:13px;}
+  summary{cursor:pointer;font-weight:bold;color:var(--azul);}
+  .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px;}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+</style>
+</head>
+<body>
+  <h1>Desmembrar Pallet</h1>
+  <div class="sub">Setor Plásticos — DUNAX · leia o QR do pallet pelo celular. Os pacotes entram na fila e são impressos no Terminal da estação.</div>
+
+  <div class="cartao">
+    <div style="margin-bottom:8px">API: <span id="pApi" class="pill n">—</span></div>
+    <button class="big" id="btnLerQR" onclick="abrirScanner()">📷 Ler QR do pallet</button>
+    <div id="reader"></div>
+    <button class="sec" id="btnParar" onclick="pararScanner()" style="display:none">■ Parar câmera</button>
+
+    <label style="margin-top:14px">Ou digite o código (ID ou código curto)</label>
+    <input id="codPallet" placeholder="Ex.: PD20-09-0710261432-80 ou ZZ9996" onkeydown="if(event.key==='Enter')desmembrar()">
+    <button class="sec" onclick="desmembrar()">Desmembrar</button>
+
+    <div id="status" class="status info" style="display:none"></div>
+  </div>
+
+  <details>
+    <summary>Configuração</summary>
+    <div class="cartao" style="margin-top:8px">
+      <label>URL da API (Web App /exec do Apps Script — a mesma do Terminal)</label>
+      <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <button class="sec" onclick="salvarConfig()">Salvar</button>
+    </div>
+  </details>
+
+<script>
+  var qrScanner = null;
+
+  function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+  function val(id){ return (document.getElementById(id).value||'').trim(); }
+  function apiUrl(){ return (ls('dm_api')||'').trim(); }
+  function pill(id,txt,c){ var el=document.getElementById(id); el.textContent=txt; el.className='pill '+c; }
+  function setStatus(t,c){ var el=document.getElementById('status'); el.style.display='block'; el.textContent=t; el.className='status '+c; }
+
+  window.onload = function(){
+    document.getElementById('apiUrl').value = apiUrl();
+    pill('pApi', apiUrl()? 'configurada':'sem URL', apiUrl()? 'g':'r');
+    if(!apiUrl()) setStatus('Cole a URL da API em "Configuração" (a mesma usada no Terminal Central).','info');
+  };
+  function salvarConfig(){ ls('dm_api', val('apiUrl')); pill('pApi','configurada','g'); setStatus('URL salva.','ok'); }
+
+  /* ===== API ===== */
+  async function getAPI(params){ var r = await fetch(apiUrl()+params, {method:'GET'}); return await r.json(); }
+  async function postAPI(obj){
+    var r = await fetch(apiUrl(), {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(obj)});
+    return await r.json();
+  }
+
+  /* ===== Scanner ===== */
+  async function abrirScanner(){
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(typeof Html5Qrcode === 'undefined'){ setStatus('Leitor de QR não carregou (sem internet). Digite o código manualmente.','erro'); return; }
+    if(qrScanner) return;
+    document.getElementById('reader').style.display='block';
+    document.getElementById('btnParar').style.display='block';
+    document.getElementById('btnLerQR').disabled=true;
+    try{
+      qrScanner = new Html5Qrcode('reader');
+      await qrScanner.start({ facingMode:'environment' }, { fps:10, qrbox:240 },
+        function(txt){ onQRDecodificado(txt); }, function(){});
+    }catch(e){
+      setStatus('Não consegui abrir a câmera: '+e+'. Verifique se abriu por https e se deu permissão de câmera.','erro');
+      await pararScanner();
+    }
+  }
+  async function pararScanner(){
+    document.getElementById('btnParar').style.display='none';
+    document.getElementById('btnLerQR').disabled=false;
+    if(qrScanner){ try{ await qrScanner.stop(); await qrScanner.clear(); }catch(e){} qrScanner=null; }
+    document.getElementById('reader').style.display='none';
+  }
+  async function onQRDecodificado(txt){
+    var cod = String(txt||'').trim();
+    if(cod.toUpperCase().indexOf('MA,')===0) cod = cod.substring(3).trim();  // remove prefixo de modo do ZPL
+    document.getElementById('codPallet').value = cod;
+    await pararScanner();
+    desmembrar();
+  }
+
+  /* ===== Desmembramento ===== */
+  async function desmembrar(){
+    var cod = val('codPallet');
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(!cod){ setStatus('Informe ou leia o código do pallet.','erro'); return; }
+    setStatus('Processando '+cod+'…','info');
+    try{
+      var alvo = cod;
+      // código curto (2 letras + 4 dígitos) -> resolve para o ID do pallet
+      if(/^[A-Za-z]{2}\d{4}$/.test(cod)){
+        var b = await getAPI('?acao=pallet&id='+encodeURIComponent(cod.toUpperCase()));
+        if(b.ok && b.pallet) alvo = b.pallet.ID_Pallet;
+      }
+      var d = await postAPI({acao:'desmembrar', idPallet: alvo});
+      if(!d.ok) throw new Error(d.erro||'falha');
+      setStatus('✔ Gerados '+d.total+' pacotes ('+d.pecasPorPacote+' pç cada). Entraram na fila — imprima no Terminal da estação.','ok');
+      document.getElementById('codPallet').value='';
+    }catch(e){ setStatus('Erro: '+e,'erro'); }
+  }
+</script>
+</body>
+</html>
