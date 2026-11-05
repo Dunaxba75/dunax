@@ -50,15 +50,19 @@
       <label>URL da API (Web App /exec do Apps Script — a mesma do Terminal)</label>
       <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
       <button class="sec" onclick="salvarConfig()">Salvar</button>
+      <div class="sub" style="margin-top:8px">Já vem preenchida com o endereço padrão. Só mude aqui se o deploy do Apps Script mudar.</div>
     </div>
   </details>
 
 <script>
   var qrScanner = null;
 
+  // URL padrão do Web App (/exec). Fica embutida para o operador não precisar colar nada.
+  var API_PADRAO = 'https://script.google.com/a/macros/dulub.net/s/AKfycbwksL1L7rJ_YetodPQaswNarvOATNbDuSg5un3Q-qUvIiE9NnPpB-WPCyGKuLFpsOAF/exec';
+
   function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
   function val(id){ return (document.getElementById(id).value||'').trim(); }
-  function apiUrl(){ return (ls('dm_api')||'').trim(); }
+  function apiUrl(){ return (ls('dm_api')||API_PADRAO).trim(); }
   function pill(id,txt,c){ var el=document.getElementById(id); el.textContent=txt; el.className='pill '+c; }
   function setStatus(t,c){ var el=document.getElementById('status'); el.style.display='block'; el.textContent=t; el.className='status '+c; }
 
