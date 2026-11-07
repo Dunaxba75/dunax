@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Abastecimento do Funil — DUNAX Plásticos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{ --azul:#1F3A6E; --verde:#1a7a44; --laranja:#F26B21; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#eef1f5;color:#222;max-width:640px;margin:0 auto;}
+  h1{font-size:19px;color:var(--verde);margin:0 0 2px;}
+  .sub{color:#666;font-size:12.5px;margin-bottom:14px;}
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  label{display:block;font-size:12px;font-weight:bold;color:#555;margin:8px 0 4px;}
+  input,select{width:100%;padding:13px;font-size:17px;border:1px solid #c7ccd4;border-radius:8px;}
+  #qr{font-family:monospace;letter-spacing:1px;border:2px solid var(--verde);}
+  .linha{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .linha>div{flex:1;min-width:150px}
+  button{padding:14px 16px;font-size:16px;font-weight:bold;border:none;border-radius:9px;background:var(--verde);color:#fff;cursor:pointer;width:100%;margin-top:10px;}
+  button.sec{background:var(--azul);font-size:14px;}
+  button.big{padding:18px;font-size:18px;}
+  button:disabled{background:#aab;}
+  .status{padding:12px 13px;border-radius:8px;margin-top:12px;font-size:15px;line-height:1.4;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;}
+  #reader{width:100%;margin-top:12px;border:1px solid #e3e7ee;border-radius:8px;overflow:hidden;display:none}
+  .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+  .hist{font-size:13px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px}
+  details{margin-top:6px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul)}
+  #painelLote{display:none;border:2px solid var(--verde);border-radius:9px;padding:13px;margin-top:12px;background:#f3fbf5;}
+  #painelLote .big-prod{font-size:16px;font-weight:bold;color:var(--verde);}
+  .tag-tipo{display:inline-block;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:12px;background:#dcedc8;color:#33691e;}
+</style>
+</head>
+<body>
+  <h1>Abastecimento do Funil</h1>
+  <div class="sub">Plásticos DUNAX · escolha a máquina, bipe o QR da <b>mistura</b> ou do <b>produto intermediário</b> (preforma/tampa), confira a quantidade e confirme. O material entra no funil da máquina. Funciona com leitor de QR (PC) ou câmera (celular).</div>
+
+  <div class="cartao">
+    <div style="margin-bottom:8px">API: <span id="pApi" class="pill n">—</span></div>
+    <label>Máquina (funil)</label>
+    <select id="maquina"><option value="">Carregando…</option></select>
+
+    <label style="margin-top:12px">Operador (opcional)</label>
+    <input id="operador" placeholder="Nome de quem está abastecendo" autocomplete="off">
+
+    <label style="margin-top:12px">Bipe ou digite o QR da mistura/intermediário</label>
+    <div class="linha">
+      <div><input id="qr" placeholder="Aponte o leitor e bipe… (ou digite o lote)" autocomplete="off"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();resolverAgora();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" style="width:auto" onclick="resolverAgora()">Buscar</button></div>
+    </div>
+    <button class="big" id="btnCam" onclick="abrirCamera()">📷 Usar câmera do celular</button>
+    <div id="reader"></div>
+    <button class="sec" id="btnParar" onclick="pararCamera()" style="display:none">■ Parar câmera</button>
+
+    <!-- Painel que aparece depois de resolver o QR -->
+    <div id="painelLote">
+      <div><span class="tag-tipo" id="loteTipo">—</span></div>
+      <div class="big-prod" id="loteProduto" style="margin-top:6px">—</div>
+      <div style="font-size:13px;color:#555" id="loteInfo">—</div>
+      <label style="margin-top:10px">Quantidade a abastecer (<span id="loteUnid">kg</span>)</label>
+      <div class="linha">
+        <div><input id="qtd" type="number" step="0.01" min="0" placeholder="0"></div>
+        <div style="flex:0 0 auto"><button class="sec" style="width:auto;margin-top:0" onclick="usarTudo()">Tudo</button></div>
+      </div>
+      <button id="btnConfirmar" onclick="confirmarAbastecer()">✔ Abastecer funil</button>
+    </div>
+
+    <div id="status" class="status info">Pronto para abastecer.</div>
+  </div>
+
+  <div class="cartao">
+    <strong style="color:var(--verde);font-size:14px">Últimos abastecimentos</strong>
+    <div id="hist"></div>
+  </div>
+
+  <details>
+    <summary>Configuração</summary>
+    <div class="cartao" style="margin-top:8px">
+      <label>URL da API dos Plásticos (Web App /exec — acesso "Qualquer pessoa")</label>
+      <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <button class="sec" onclick="salvarConfig()">Salvar</button>
+    </div>
+  </details>
+
+<script>
+  var qrScanner=null, historico=[], loteAtivo=null;
+
+  function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+  function val(id){ return (document.getElementById(id).value||'').trim(); }
+  function apiUrl(){ return (ls('plast_api')||'').trim().split('?')[0].split('#')[0]; }
+  function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
+  function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
+  function focoQR(){ try{ document.getElementById('qr').focus(); }catch(e){} }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  window.onload=function(){
+    document.getElementById('apiUrl').value=apiUrl();
+    pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'r');
+    var op=ls('plast_operador'); if(op) document.getElementById('operador').value=op;
+    if(!apiUrl()){ setStatus('Cole a URL da API dos Plásticos em "Configuração".','info'); }
+    else carregarMaquinas();
+    focoQR();
+  };
+  function salvarConfig(){ ls('plast_api', val('apiUrl')); pill('pApi','configurada','g'); carregarMaquinas(); setStatus('URL salva.','ok'); focoQR(); }
+
+  async function getAPI(params){
+    var r=await fetch(apiUrl()+params,{method:'GET'});
+    var t=await r.text();
+    try{ return JSON.parse(t); }
+    catch(e){
+      var msg=t.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
+      return {ok:false, erro:'A API não retornou JSON (HTTP '+r.status+'). Resposta: '+(msg||'(vazia)')};
+    }
+  }
+
+  async function carregarMaquinas(){
+    var sel=document.getElementById('maquina');
+    try{
+      var d=await getAPI('?acao=funil_maquinas');
+      if(d && d.ok && d.maquinas && d.maquinas.length){
+        sel.innerHTML='<option value="">Selecione a máquina…</option>';
+        d.maquinas.forEach(function(m){
+          var rotulo = m.tag + (m.nome? ' — '+m.nome : '');
+          sel.innerHTML+='<option value="'+esc(m.tag)+'">'+esc(rotulo)+'</option>';
+        });
+        var ult=ls('plast_maquina'); if(ult) sel.value=ult;
+      }else{
+        sel.innerHTML='<option value="">(nenhuma máquina retornada)</option>';
+        setStatus('Não vieram máquinas da API. Resposta: '+JSON.stringify(d),'info');
+      }
+    }catch(e){
+      sel.innerHTML='<option value="">(erro ao carregar)</option>';
+      setStatus('Não carregou as máquinas da API ('+e+').','erro');
+    }
+  }
+
+  function limparCodigo(txt){
+    var c=String(txt||'').trim();
+    if(c.toUpperCase().indexOf('MA,')===0) c=c.substring(3).trim(); // remove prefixo de modo do ZPL
+    return c;
+  }
+
+  // 1) Bipa/busca o QR -> resolve o lote (mostra produto/tipo/saldo) e pede quantidade
+  async function resolverAgora(){
+    var cod=limparCodigo(val('qr'));
+    var maq=val('maquina');
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(!maq){ setStatus('Selecione a máquina (funil).','erro'); return; }
+    if(!cod){ setStatus('Bipe ou digite o QR da mistura/intermediário.','erro'); focoQR(); return; }
+    ls('plast_maquina', maq);
+    esconderPainel();
+    setStatus('Consultando '+cod+'…','info');
+    try{
+      var r=await getAPI('?acao=funil_resolver&id='+encodeURIComponent(cod));
+      if(r && r.ok){
+        loteAtivo = r;
+        document.getElementById('loteTipo').textContent = r.tipo;
+        document.getElementById('loteProduto').textContent = (r.produto||'(sem produto)') + (r.cor? ' · '+r.cor : '');
+        document.getElementById('loteInfo').innerHTML = 'Lote <b>'+esc(r.lote)+'</b> · saldo disponível: <b>'+r.saldo+' '+(r.unidade||'')+'</b>';
+        document.getElementById('loteUnid').textContent = r.unidade||'kg';
+        document.getElementById('qtd').value = r.saldo>0 ? r.saldo : '';
+        document.getElementById('painelLote').style.display='block';
+        setStatus('Confira a quantidade e confirme o abastecimento.','info');
+        try{ document.getElementById('qtd').focus(); document.getElementById('qtd').select(); }catch(e){}
+      }else{
+        setStatus('🚨 '+((r&&r.erro)||'QR não encontrado.'),'erro');
+        focoQR();
+      }
+    }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+  }
+
+  function usarTudo(){ if(loteAtivo){ document.getElementById('qtd').value = loteAtivo.saldo; } }
+
+  function esconderPainel(){ document.getElementById('painelLote').style.display='none'; loteAtivo=null; }
+
+  // 2) Confirma -> abastece o funil
+  async function confirmarAbastecer(){
+    if(!loteAtivo){ setStatus('Bipe um QR primeiro.','erro'); return; }
+    var maq=val('maquina');
+    var op=val('operador');
+    var qtd=parseFloat((val('qtd')||'').replace(',','.'))||0;
+    if(!maq){ setStatus('Selecione a máquina (funil).','erro'); return; }
+    if(!(qtd>0)){ setStatus('Informe a quantidade a abastecer.','erro'); return; }
+    if(qtd > loteAtivo.saldo + 0.001){ setStatus('Quantidade maior que o saldo do lote ('+loteAtivo.saldo+' '+(loteAtivo.unidade||'')+').','erro'); return; }
+    if(op) ls('plast_operador', op);
+
+    var btn=document.getElementById('btnConfirmar');
+    btn.disabled=true; btn.textContent='Abastecendo…';
+    setStatus('Abastecendo o funil de '+maq+'…','info');
+    try{
+      var r=await getAPI('?acao=funil_abastecer'
+            +'&lote='+encodeURIComponent(loteAtivo.lote)
+            +'&maquina='+encodeURIComponent(maq)
+            +'&qtd='+encodeURIComponent(qtd)
+            +'&resp='+encodeURIComponent(op));
+      if(r && r.ok){
+        setStatus(r.mensagem || '✔ Funil abastecido.','ok');
+        historico.unshift({t:new Date(), txt:(r.produto||'')+' · '+(r.qtd||qtd)+' '+(r.unidade||'')+' → '+maq, cc:r.lote||loteAtivo.lote, ok:true});
+        document.getElementById('qr').value='';
+        esconderPainel();
+      }else{
+        setStatus('🚨 '+((r&&r.erro)||'Falha ao abastecer.'),'erro');
+        historico.unshift({t:new Date(), txt:((r&&r.erro)||'falha'), cc:loteAtivo.lote, ok:false});
+      }
+    }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+    btn.disabled=false; btn.textContent='✔ Abastecer funil';
+    renderHist(); focoQR();
+  }
+
+  function renderHist(){
+    var box=document.getElementById('hist');
+    if(!historico.length){ box.innerHTML='<div style="color:#aaa;padding:6px">(nenhum ainda)</div>'; return; }
+    box.innerHTML='';
+    historico.slice(0,12).forEach(function(h){
+      var hh=('0'+h.t.getHours()).slice(-2)+':'+('0'+h.t.getMinutes()).slice(-2);
+      box.innerHTML+='<div class="hist"><span><span class="pill '+(h.ok?'g':'r')+'">'+(h.ok?'OK':'ERRO')+'</span> '+esc(h.txt)+'</span><span style="color:#999;font-family:monospace">'+esc(h.cc)+' · '+hh+'</span></div>';
+    });
+  }
+
+  /* ===== câmera (celular) ===== */
+  async function abrirCamera(){
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(!val('maquina')){ setStatus('Selecione a máquina (funil) antes de bipar.','erro'); return; }
+    if(typeof Html5Qrcode==='undefined'){ setStatus('Leitor de câmera não carregou (sem internet).','erro'); return; }
+    if(qrScanner) return;
+    document.getElementById('reader').style.display='block';
+    document.getElementById('btnParar').style.display='block';
+    document.getElementById('btnCam').disabled=true;
+    try{
+      qrScanner=new Html5Qrcode('reader');
+      await qrScanner.start({facingMode:'environment'},{fps:10,qrbox:240},
+        function(txt){ document.getElementById('qr').value=limparCodigo(txt); pararCamera(); resolverAgora(); },
+        function(){});
+    }catch(e){ setStatus('Não consegui abrir a câmera: '+e+'. Use https e permita a câmera.','erro'); pararCamera(); }
+  }
+  async function pararCamera(){
+    document.getElementById('btnParar').style.display='none';
+    document.getElementById('btnCam').disabled=false;
+    if(qrScanner){ try{ await qrScanner.stop(); await qrScanner.clear(); }catch(e){} qrScanner=null; }
+    document.getElementById('reader').style.display='none';
+    focoQR();
+  }
+</script>
+</body>
+</html>
