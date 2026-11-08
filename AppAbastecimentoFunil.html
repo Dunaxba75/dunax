@@ -39,13 +39,10 @@
 
   <div class="cartao">
     <div style="margin-bottom:8px">API: <span id="pApi" class="pill n">—</span></div>
-    <label>Máquina (funil)</label>
-    <select id="maquina"><option value="">Carregando…</option></select>
-
-    <label style="margin-top:12px">Operador (opcional)</label>
+    <label>Operador (opcional)</label>
     <input id="operador" placeholder="Nome de quem está abastecendo" autocomplete="off">
 
-    <label style="margin-top:12px">Bipe ou digite o QR da mistura/intermediário</label>
+    <label style="margin-top:12px">1º — Bipe ou digite o QR da mistura/intermediário</label>
     <div class="linha">
       <div><input id="qr" placeholder="Aponte o leitor e bipe… (ou digite o lote)" autocomplete="off"
                   onkeydown="if(event.key==='Enter'){event.preventDefault();resolverAgora();}"></div>
@@ -60,7 +57,11 @@
       <div><span class="tag-tipo" id="loteTipo">—</span></div>
       <div class="big-prod" id="loteProduto" style="margin-top:6px">—</div>
       <div style="font-size:13px;color:#555" id="loteInfo">—</div>
-      <label style="margin-top:10px">Quantidade a abastecer (<span id="loteUnid">kg</span>)</label>
+
+      <label style="margin-top:12px">2º — Máquina (funil) <span style="font-weight:normal;color:#888">· só as cadastradas para este produto</span></label>
+      <select id="maquina"><option value="">Selecione a máquina…</option></select>
+
+      <label style="margin-top:10px">3º — Quantidade a abastecer (<span id="loteUnid">kg</span>)</label>
       <div class="linha">
         <div><input id="qtd" type="number" step="0.01" min="0" placeholder="0"></div>
         <div style="flex:0 0 auto"><button class="sec" style="width:auto;margin-top:0" onclick="usarTudo()">Tudo</button></div>
@@ -88,9 +89,13 @@
 <script>
   var qrScanner=null, historico=[], loteAtivo=null;
 
+  // URL padrão da API dos Plásticos (já vem configurada — o campo em "Configuração"
+  // serve só para trocar, se um dia a implantação mudar de endereço).
+  var API_PADRAO='https://script.google.com/a/dulub.net/macros/s/AKfycbwksL1L7rJ_YetodPQaswNarvOATNbDuSg5un3Q-qUvIiE9NnPpB-WPCyGKuLFpsOAF/exec';
+
   function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
   function val(id){ return (document.getElementById(id).value||'').trim(); }
-  function apiUrl(){ return (ls('plast_api')||'').trim().split('?')[0].split('#')[0]; }
+  function apiUrl(){ var u=(ls('plast_api')||'').trim() || API_PADRAO; return u.split('?')[0].split('#')[0]; }
   function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
   function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
   function focoQR(){ try{ document.getElementById('qr').focus(); }catch(e){} }
@@ -101,10 +106,10 @@
     pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'r');
     var op=ls('plast_operador'); if(op) document.getElementById('operador').value=op;
     if(!apiUrl()){ setStatus('Cole a URL da API dos Plásticos em "Configuração".','info'); }
-    else carregarMaquinas();
+    else setStatus('Bipe o QR da mistura/intermediário para ver as máquinas.','info');
     focoQR();
   };
-  function salvarConfig(){ ls('plast_api', val('apiUrl')); pill('pApi','configurada','g'); carregarMaquinas(); setStatus('URL salva.','ok'); focoQR(); }
+  function salvarConfig(){ ls('plast_api', val('apiUrl')); pill('pApi','configurada','g'); setStatus('URL salva.','ok'); focoQR(); }
 
   async function getAPI(params){
     var r=await fetch(apiUrl()+params,{method:'GET'});
@@ -116,25 +121,23 @@
     }
   }
 
-  async function carregarMaquinas(){
+  // Preenche o seletor com AS MÁQUINAS CADASTRADAS para o produto bipado.
+  function preencherMaquinas(maquinas){
     var sel=document.getElementById('maquina');
-    try{
-      var d=await getAPI('?acao=funil_maquinas');
-      if(d && d.ok && d.maquinas && d.maquinas.length){
-        sel.innerHTML='<option value="">Selecione a máquina…</option>';
-        d.maquinas.forEach(function(m){
-          var rotulo = m.tag + (m.nome? ' — '+m.nome : '');
-          sel.innerHTML+='<option value="'+esc(m.tag)+'">'+esc(rotulo)+'</option>';
-        });
-        var ult=ls('plast_maquina'); if(ult) sel.value=ult;
-      }else{
-        sel.innerHTML='<option value="">(nenhuma máquina retornada)</option>';
-        setStatus('Não vieram máquinas da API. Resposta: '+JSON.stringify(d),'info');
-      }
-    }catch(e){
-      sel.innerHTML='<option value="">(erro ao carregar)</option>';
-      setStatus('Não carregou as máquinas da API ('+e+').','erro');
+    maquinas = maquinas || [];
+    if(!maquinas.length){
+      sel.innerHTML='<option value="">(nenhuma máquina cadastrada)</option>';
+      return 0;
     }
+    sel.innerHTML='<option value="">Selecione a máquina…</option>';
+    maquinas.forEach(function(m){
+      var rotulo = m.tag + (m.nome? ' — '+m.nome : '');
+      sel.innerHTML+='<option value="'+esc(m.tag)+'">'+esc(rotulo)+'</option>';
+    });
+    // se tiver uma só, já seleciona; senão tenta a última usada, se estiver na lista
+    if(maquinas.length===1){ sel.value=maquinas[0].tag; }
+    else { var ult=ls('plast_maquina'); if(ult && maquinas.some(function(m){return m.tag===ult;})) sel.value=ult; }
+    return maquinas.length;
   }
 
   function limparCodigo(txt){
@@ -143,14 +146,12 @@
     return c;
   }
 
-  // 1) Bipa/busca o QR -> resolve o lote (mostra produto/tipo/saldo) e pede quantidade
+  // 1) Bipa/busca o QR -> resolve o lote, mostra produto/tipo/saldo e lista SÓ as
+  //    máquinas cadastradas para aquele produto; depois escolhe máquina e quantidade.
   async function resolverAgora(){
     var cod=limparCodigo(val('qr'));
-    var maq=val('maquina');
     if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
-    if(!maq){ setStatus('Selecione a máquina (funil).','erro'); return; }
     if(!cod){ setStatus('Bipe ou digite o QR da mistura/intermediário.','erro'); focoQR(); return; }
-    ls('plast_maquina', maq);
     esconderPainel();
     setStatus('Consultando '+cod+'…','info');
     try{
@@ -161,10 +162,19 @@
         document.getElementById('loteProduto').textContent = (r.produto||'(sem produto)') + (r.cor? ' · '+r.cor : '');
         document.getElementById('loteInfo').innerHTML = 'Lote <b>'+esc(r.lote)+'</b> · saldo disponível: <b>'+r.saldo+' '+(r.unidade||'')+'</b>';
         document.getElementById('loteUnid').textContent = r.unidade||'kg';
-        document.getElementById('qtd').value = r.saldo>0 ? r.saldo : '';
+
+        var n = preencherMaquinas(r.maquinas);
         document.getElementById('painelLote').style.display='block';
-        setStatus('Confira a quantidade e confirme o abastecimento.','info');
-        try{ document.getElementById('qtd').focus(); document.getElementById('qtd').select(); }catch(e){}
+
+        if(n===0){
+          setStatus('🚫 Nenhuma máquina cadastrada para processar "'+(r.produto||'')+'". Verifique o Produto_Padrao no cadastro de equipamentos.','erro');
+          document.getElementById('qtd').value='';
+          return;
+        }
+        document.getElementById('qtd').value = r.saldo>0 ? r.saldo : '';
+        setStatus(n===1 ? 'Máquina selecionada. Confira a quantidade e confirme.'
+                        : 'Escolha a máquina ('+n+' cadastradas), confira a quantidade e confirme.','info');
+        try{ document.getElementById('maquina').focus(); }catch(e){}
       }else{
         setStatus('🚨 '+((r&&r.erro)||'QR não encontrado.'),'erro');
         focoQR();
@@ -186,6 +196,7 @@
     if(!(qtd>0)){ setStatus('Informe a quantidade a abastecer.','erro'); return; }
     if(qtd > loteAtivo.saldo + 0.001){ setStatus('Quantidade maior que o saldo do lote ('+loteAtivo.saldo+' '+(loteAtivo.unidade||'')+').','erro'); return; }
     if(op) ls('plast_operador', op);
+    ls('plast_maquina', maq);
 
     var btn=document.getElementById('btnConfirmar');
     btn.disabled=true; btn.textContent='Abastecendo…';
@@ -223,7 +234,6 @@
   /* ===== câmera (celular) ===== */
   async function abrirCamera(){
     if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
-    if(!val('maquina')){ setStatus('Selecione a máquina (funil) antes de bipar.','erro'); return; }
     if(typeof Html5Qrcode==='undefined'){ setStatus('Leitor de câmera não carregou (sem internet).','erro'); return; }
     if(qrScanner) return;
     document.getElementById('reader').style.display='block';
