@@ -28,6 +28,8 @@
   .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
   .hist{font-size:13px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px}
   details{margin-top:6px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul)}
+  #painelItem{display:none;border:2px solid var(--azul);border-radius:9px;padding:13px;margin-top:12px;background:#f3f7ff;}
+  #painelItem .big-prod{font-size:16px;font-weight:bold;color:var(--azul);}
 </style>
 </head>
 <body>
@@ -36,18 +38,27 @@
 
   <div class="cartao">
     <div style="margin-bottom:8px">API: <span id="pApi" class="pill n">—</span></div>
-    <label>Linha de envase</label>
-    <select id="linha"><option value="">Carregando…</option></select>
 
-    <label style="margin-top:12px">Bipe ou digite o código do pallet</label>
+    <label>1º — Bipe ou digite o código do pallet/embalagem</label>
     <div class="linha">
       <div><input id="qr" placeholder="Aponte o leitor e bipe… (ou digite)" autocomplete="off"
-                  onkeydown="if(event.key==='Enter'){event.preventDefault();biparAgora();}"></div>
-      <div style="flex:0 0 auto"><button class="sec" style="width:auto" onclick="biparAgora()">Registrar</button></div>
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();resolverLinhas();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" style="width:auto" onclick="resolverLinhas()">Buscar</button></div>
     </div>
     <button class="big" id="btnCam" onclick="abrirCamera()">📷 Usar câmera do celular</button>
     <div id="reader"></div>
     <button class="sec" id="btnParar" onclick="pararCamera()" style="display:none">■ Parar câmera</button>
+
+    <!-- Painel que aparece depois de bipar: item + linhas compatíveis -->
+    <div id="painelItem">
+      <div class="big-prod" id="itemDesc">—</div>
+      <div style="font-size:13px;color:#555" id="itemInfo">—</div>
+
+      <label style="margin-top:12px">2º — Linha de envase <span style="font-weight:normal;color:#888">· só as compatíveis</span></label>
+      <select id="linha"><option value="">Selecione a linha…</option></select>
+
+      <button id="btnConf" onclick="confirmarEntrada()">✔ Direcionar para a linha</button>
+    </div>
 
     <div id="status" class="status info">Pronto para bipar.</div>
   </div>
@@ -79,7 +90,7 @@
   </details>
 
 <script>
-  var qrScanner=null, historico=[];
+  var qrScanner=null, historico=[], codAtivo=null, itemAtivo=null;
 
   function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
   function val(id){ return (document.getElementById(id).value||'').trim(); }
@@ -92,10 +103,10 @@
     document.getElementById('apiUrl').value=apiUrl();
     pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'r');
     if(!apiUrl()){ setStatus('Cole a URL da API do Envase em "Configuração".','info'); }
-    else carregarLinhas();
+    else setStatus('Bipe o código do pallet/embalagem para ver as linhas.','info');
     focoQR();
   };
-  function salvarConfig(){ ls('emb_api', val('apiUrl')); pill('pApi','configurada','g'); carregarLinhas(); setStatus('URL salva.','ok'); focoQR(); }
+  function salvarConfig(){ ls('emb_api', val('apiUrl')); pill('pApi','configurada','g'); setStatus('URL salva.','ok'); focoQR(); }
 
   async function getAPI(params){
     var r=await fetch(apiUrl()+params,{method:'GET'});
@@ -108,59 +119,90 @@
   }
   async function postAPI(obj){ var r=await fetch(apiUrl(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(obj)}); return await r.json(); }
 
-  async function carregarLinhas(){
-    var sel=document.getElementById('linha');
-    var padrao=['L1','L2','L3','L4','L5'];
-    try{
-      var d=await getAPI('?acaoemb=linhas');
-      var linhas=(d && d.ok && d.linhas && d.linhas.length) ? d.linhas : padrao;
-      sel.innerHTML='<option value="">Selecione a linha…</option>';
-      linhas.forEach(function(l){ sel.innerHTML+='<option value="'+l+'">'+l+'</option>'; });
-      var ult=ls('emb_linha'); if(ult) sel.value=ult;
-      if(!(d && d.ok && d.linhas && d.linhas.length)){
-        setStatus('Linhas padrão (L1–L5). Resposta da API: '+JSON.stringify(d),'info');
-      }
-    }catch(e){
-      sel.innerHTML='<option value="">Selecione a linha…</option>';
-      padrao.forEach(function(l){ sel.innerHTML+='<option value="'+l+'">'+l+'</option>'; });
-      setStatus('Não carregou linhas da API ('+e+'). Usando L1–L5 — pode testar mesmo assim.','info');
-    }
-  }
-
   function limparCodigo(txt){
     var c=String(txt||'').trim();
     if(c.toUpperCase().indexOf('MA,')===0) c=c.substring(3).trim(); // remove prefixo de modo do ZPL
     return c;
   }
 
-  async function biparAgora(){
+  function esconderPainel(){ document.getElementById('painelItem').style.display='none'; codAtivo=null; itemAtivo=null; }
+
+  // Preenche o seletor com AS LINHAS COMPATÍVEIS com o item bipado.
+  function preencherLinhas(linhas){
+    var sel=document.getElementById('linha');
+    linhas = linhas || [];
+    if(!linhas.length){ sel.innerHTML='<option value="">(nenhuma linha compatível)</option>'; return 0; }
+    sel.innerHTML='<option value="">Selecione a linha…</option>';
+    linhas.forEach(function(l){ sel.innerHTML+='<option value="'+esc(l)+'">'+esc(l)+'</option>'; });
+    if(linhas.length===1){ sel.value=linhas[0]; }
+    else { var u=ls('emb_linha'); if(u && linhas.indexOf(u)!==-1) sel.value=u; }
+    return linhas.length;
+  }
+
+  // 1) Bipa/busca o código -> resolve o item e mostra SÓ as linhas compatíveis.
+  async function resolverLinhas(){
     var cod=limparCodigo(val('qr'));
-    var linha=val('linha');
     if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
-    if(!linha){ setStatus('Selecione a linha de envase.','erro'); return; }
-    if(!cod){ setStatus('Bipe ou digite o código do pallet.','erro'); focoQR(); return; }
-    ls('emb_linha', linha);
-    setStatus('Registrando '+cod+'…','info');
-    document.getElementById('qr').value='';
+    if(!cod){ setStatus('Bipe ou digite o código do pallet/embalagem.','erro'); focoQR(); return; }
+    esconderPainel();
+    setStatus('Consultando '+cod+'…','info');
     try{
-      // GET em vez de POST: o Apps Script redireciona o POST cross-origin e o
-      // navegador barra a resposta ("Failed to fetch"). O GET passa igual às linhas.
-      var r=await getAPI('?acaoemb=entrar&cc='+encodeURIComponent(cod)+'&linha='+encodeURIComponent(linha));
+      var r=await getAPI('?acaoemb=linhaspara&cc='+encodeURIComponent(cod));
       if(r && r.ok){
-        // embalagem comprada (lote ativo) traz r.mensagem + r.loteProducao;
-        // pallet dos plásticos traz r.descricao + r.qtd.
-        var msg = r.mensagem ? r.mensagem
-                 : ('✔ '+(r.descricao||'')+' · '+(r.qtd||0)+' un · pallet '+(r.cc||cod));
-        setStatus(msg,'ok');
-        var resumo = r.mensagem
-          ? ((r.descricao||'')+(r.loteProducao?(' · prod '+r.loteProducao):'')+(r.cc?(' · lote '+r.cc):''))
-          : ((r.descricao||'')+' · '+(r.qtd||0)+' un');
-        historico.unshift({t:new Date(), txt:resumo, cc:r.cc||cod, ok:true});
+        codAtivo=cod; itemAtivo=r;
+        document.getElementById('itemDesc').textContent = r.descricao || cod;
+        var det=[];
+        if(r.formato) det.push('Formato '+r.formato);
+        if(r.branca)  det.push('BRANCA');
+        if(r.produto) det.push(r.produto);
+        document.getElementById('itemInfo').textContent = det.join(' · ');
+
+        var n=preencherLinhas(r.linhas);
+        document.getElementById('painelItem').style.display='block';
+
+        if(n===0){
+          setStatus('🚫 Nenhuma linha compatível para "'+(r.descricao||cod)+'"'
+                    +(r.branca?' — galão branco vai para Arla/Água/outra unidade.':'.'),'erro');
+          return;
+        }
+        setStatus(n===1 ? 'Linha selecionada. Confirme o direcionamento.'
+                        : 'Escolha a linha ('+n+' compatíveis) e confirme.','info');
+        try{ document.getElementById('linha').focus(); }catch(e){}
       }else{
-        setStatus('🚨 '+((r&&r.erro)||'falha'),'erro');
-        historico.unshift({t:new Date(), txt:((r&&r.erro)||'falha'), cc:cod, ok:false});
+        setStatus('🚨 '+((r&&r.erro)||'Código não encontrado.'),'erro');
+        focoQR();
       }
     }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+  }
+
+  // 2) Confirma -> direciona o item para a linha escolhida (ação 'entrar').
+  async function confirmarEntrada(){
+    var linha=val('linha');
+    if(!codAtivo){ setStatus('Bipe um código primeiro.','erro'); return; }
+    if(!linha){ setStatus('Selecione a linha de envase.','erro'); return; }
+    ls('emb_linha', linha);
+    var btn=document.getElementById('btnConf'); btn.disabled=true; btn.textContent='Direcionando…';
+    setStatus('Direcionando para '+linha+'…','info');
+    try{
+      // GET em vez de POST: o Apps Script redireciona o POST cross-origin e o
+      // navegador barra a resposta ("Failed to fetch"). O GET passa igual.
+      var r=await getAPI('?acaoemb=entrar&cc='+encodeURIComponent(codAtivo)+'&linha='+encodeURIComponent(linha));
+      if(r && r.ok){
+        var msg = r.mensagem ? r.mensagem
+                 : ('✔ '+(r.descricao||'')+' · '+(r.qtd||0)+' un · '+linha);
+        setStatus(msg,'ok');
+        var resumo = r.mensagem
+          ? ((r.descricao||'')+(r.loteProducao?(' · prod '+r.loteProducao):'')+' → '+linha)
+          : ((r.descricao||'')+' · '+(r.qtd||0)+' un → '+linha);
+        historico.unshift({t:new Date(), txt:resumo, cc:r.cc||codAtivo, ok:true});
+        document.getElementById('qr').value='';
+        esconderPainel();
+      }else{
+        setStatus('🚨 '+((r&&r.erro)||'falha'),'erro');
+        historico.unshift({t:new Date(), txt:((r&&r.erro)||'falha'), cc:codAtivo, ok:false});
+      }
+    }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+    btn.disabled=false; btn.textContent='✔ Direcionar para a linha';
     renderHist(); focoQR();
   }
 
@@ -212,7 +254,7 @@
     try{
       qrScanner=new Html5Qrcode('reader');
       await qrScanner.start({facingMode:'environment'},{fps:10,qrbox:240},
-        function(txt){ document.getElementById('qr').value=limparCodigo(txt); pararCamera(); biparAgora(); },
+        function(txt){ document.getElementById('qr').value=limparCodigo(txt); pararCamera(); resolverLinhas(); },
         function(){});
     }catch(e){ setStatus('Não consegui abrir a câmera: '+e+'. Use https e permita a câmera.','erro'); pararCamera(); }
   }
