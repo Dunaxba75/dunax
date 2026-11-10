@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Saída de Produto Acabado — DUNAX Plásticos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{ --azul:#15233F; --azul2:#1F3A6E; --laranja:#F26B21; --vermelho:#c0392b; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#eef1f5;color:#222;max-width:640px;margin:0 auto;}
+  h1{font-size:19px;color:var(--azul);margin:0 0 2px;}
+  .sub{color:#666;font-size:12.5px;margin-bottom:14px;}
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  label{display:block;font-size:12px;font-weight:bold;color:#555;margin:8px 0 4px;}
+  input,select{width:100%;padding:13px;font-size:17px;border:1px solid #c7ccd4;border-radius:8px;}
+  #qr{font-family:monospace;letter-spacing:1px;border:2px solid var(--azul2);}
+  .linha{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .linha>div{flex:1;min-width:150px}
+  button{padding:14px 16px;font-size:16px;font-weight:bold;border:none;border-radius:9px;background:var(--laranja);color:#fff;cursor:pointer;width:100%;margin-top:10px;}
+  button.sec{background:var(--azul2);font-size:14px;}
+  button.big{padding:18px;font-size:18px;}
+  button:disabled{background:#aab;}
+  .status{padding:12px 13px;border-radius:8px;margin-top:12px;font-size:15px;line-height:1.4;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;}
+  #reader{width:100%;margin-top:12px;border:1px solid #e3e7ee;border-radius:8px;overflow:hidden;display:none}
+  .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+  .hist{font-size:13px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px}
+  details{margin-top:6px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul2)}
+  #painelItem{display:none;border:2px solid var(--azul2);border-radius:9px;padding:13px;margin-top:12px;background:#f3f7ff;}
+  #painelItem .big-prod{font-size:16px;font-weight:bold;color:var(--azul2);}
+  .tag-tipo{display:inline-block;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:12px;background:#dfe7f5;color:#1F3A6E;}
+</style>
+</head>
+<body>
+  <h1>Saída de Produto Acabado</h1>
+  <div class="sub">Plásticos DUNAX · bipe o QR do <b>pallet</b> ou do <b>pacote/caixa</b>, escolha <b>Transferência</b> (filial/terceirista/Arla) ou <b>Baixa</b> (perda/ajuste) e confirme. A saída abate o estoque e fica registrada na aba SAIDAS_PRODUTO_ACABADO.</div>
+
+  <div class="cartao">
+    <div style="margin-bottom:8px">API: <span id="pApi" class="pill n">—</span></div>
+    <label>Operador (opcional)</label>
+    <input id="operador" placeholder="Nome de quem está dando a saída" autocomplete="off">
+
+    <label style="margin-top:12px">1º — Bipe ou digite o QR do pallet/pacote</label>
+    <div class="linha">
+      <div><input id="qr" placeholder="Aponte o leitor e bipe… (ou digite)" autocomplete="off"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();resolverAgora();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" style="width:auto" onclick="resolverAgora()">Buscar</button></div>
+    </div>
+    <button class="big" id="btnCam" onclick="abrirCamera()">📷 Usar câmera do celular</button>
+    <div id="reader"></div>
+    <button class="sec" id="btnParar" onclick="pararCamera()" style="display:none">■ Parar câmera</button>
+
+    <!-- Painel que aparece depois de resolver o QR -->
+    <div id="painelItem">
+      <div><span class="tag-tipo" id="itemTipo">—</span></div>
+      <div class="big-prod" id="itemProduto" style="margin-top:6px">—</div>
+      <div style="font-size:13px;color:#555" id="itemInfo">—</div>
+
+      <label style="margin-top:12px">2º — Tipo de saída</label>
+      <select id="tipo" onchange="aoTrocarTipo()">
+        <option value="">Selecione…</option>
+        <optgroup label="Transferência">
+          <option value="Transferência - Filial">🚚 Transferência - Filial</option>
+          <option value="Transferência - Terceirista">🚚 Transferência - Terceirista</option>
+          <option value="Transferência - Arla">🚚 Transferência - Arla</option>
+          <option value="Transferência - Outra unidade">🚚 Transferência - Outra unidade</option>
+        </optgroup>
+        <optgroup label="Baixa">
+          <option value="Baixa - Perda de Processo">⚠️ Baixa - Perda de Processo</option>
+          <option value="Baixa - Perda de Qualidade">🛑 Baixa - Perda de Qualidade</option>
+          <option value="Baixa - Ajuste de Inventário">🔧 Baixa - Ajuste de Inventário</option>
+        </optgroup>
+      </select>
+
+      <label id="lblDestino" style="margin-top:10px">Destino / Observação</label>
+      <input id="destino" placeholder="Ex.: DUNAX FSA / nome do terceirista" autocomplete="off">
+
+      <button id="btnConfirmar" onclick="confirmarSaida()">✔ Registrar saída</button>
+    </div>
+
+    <div id="status" class="status info">Pronto para bipar.</div>
+  </div>
+
+  <div class="cartao">
+    <strong style="color:var(--azul2);font-size:14px">Últimas saídas</strong>
+    <div id="hist"></div>
+  </div>
+
+  <details>
+    <summary>Configuração</summary>
+    <div class="cartao" style="margin-top:8px">
+      <label>URL da API dos Plásticos (Web App /exec — acesso "Qualquer pessoa")</label>
+      <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <button class="sec" onclick="salvarConfig()">Salvar</button>
+    </div>
+  </details>
+
+<script>
+  // URL padrão da API dos Plásticos (já vem configurada — o campo em "Configuração"
+  // serve só para trocar, se um dia a implantação mudar de endereço).
+  var API_PADRAO='https://script.google.com/a/dulub.net/macros/s/AKfycbwksL1L7rJ_YetodPQaswNarvOATNbDuSg5un3Q-qUvIiE9NnPpB-WPCyGKuLFpsOAF/exec';
+
+  var qrScanner=null, historico=[], itemAtivo=null;
+
+  function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+  function val(id){ return (document.getElementById(id).value||'').trim(); }
+  function apiUrl(){ var u=(ls('plast_api')||'').trim() || API_PADRAO; return u.split('?')[0].split('#')[0]; }
+  function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
+  function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
+  function focoQR(){ try{ document.getElementById('qr').focus(); }catch(e){} }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  window.onload=function(){
+    document.getElementById('apiUrl').value=apiUrl();
+    pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'r');
+    var op=ls('plast_operador'); if(op) document.getElementById('operador').value=op;
+    if(!apiUrl()){ setStatus('Cole a URL da API dos Plásticos em "Configuração".','info'); }
+    else setStatus('Bipe o QR do pallet/pacote para registrar a saída.','info');
+    focoQR();
+  };
+  function salvarConfig(){ ls('plast_api', val('apiUrl')); pill('pApi','configurada','g'); setStatus('URL salva.','ok'); focoQR(); }
+
+  async function getAPI(params){
+    var r=await fetch(apiUrl()+params,{method:'GET'});
+    var t=await r.text();
+    try{ return JSON.parse(t); }
+    catch(e){
+      var msg=t.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,180);
+      return {ok:false, erro:'A API não retornou JSON (HTTP '+r.status+'). Resposta: '+(msg||'(vazia)')};
+    }
+  }
+
+  function limparCodigo(txt){
+    var c=String(txt||'').trim();
+    if(c.toUpperCase().indexOf('MA,')===0) c=c.substring(3).trim(); // remove prefixo de modo do ZPL
+    return c;
+  }
+
+  function esconderPainel(){ document.getElementById('painelItem').style.display='none'; itemAtivo=null; }
+
+  function aoTrocarTipo(){
+    var t=val('tipo');
+    var lbl=document.getElementById('lblDestino'), inp=document.getElementById('destino');
+    if(/transfer/i.test(t)){
+      lbl.textContent='Destino (nome)';
+      inp.placeholder = (t.indexOf('Terceirista')>-1) ? 'Nome do terceirista'
+                       : (t.indexOf('Arla')>-1) ? 'Unidade/destino do Arla'
+                       : (t.indexOf('Outra')>-1) ? 'Qual unidade' : 'Ex.: DUNAX FSA, DUNAX MA';
+    } else if(t){
+      lbl.textContent='Observação (opcional)';
+      inp.placeholder='Motivo/observação da baixa';
+    } else {
+      lbl.textContent='Destino / Observação'; inp.placeholder='';
+    }
+  }
+
+  // 1) Bipa/busca o QR -> resolve o item (produto/cor/qtd/lote) e pede o tipo de saída
+  async function resolverAgora(){
+    var cod=limparCodigo(val('qr'));
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(!cod){ setStatus('Bipe ou digite o QR do pallet/pacote.','erro'); focoQR(); return; }
+    esconderPainel();
+    setStatus('Consultando '+cod+'…','info');
+    try{
+      var r=await getAPI('?acao=itemqr&id='+encodeURIComponent(cod));
+      if(r && r.ok){
+        itemAtivo = r;
+        document.getElementById('itemTipo').textContent = r.tipo || 'ITEM';
+        document.getElementById('itemProduto').textContent = (r.produto||'(sem produto)') + (r.cor? ' · '+r.cor : '');
+        document.getElementById('itemInfo').innerHTML = 'Lote <b>'+esc(r.lote)+'</b> · qtd <b>'+r.qtd+' un</b> · id '+esc(r.id||cod);
+        document.getElementById('tipo').value='';
+        aoTrocarTipo();
+        document.getElementById('painelItem').style.display='block';
+        setStatus('Escolha o tipo de saída e confirme.','info');
+        try{ document.getElementById('tipo').focus(); }catch(e){}
+      }else if(r && r.desmembrado){
+        setStatus('🚫 '+(r.erro||'Pallet desmembrado — bipe os PACOTES, não o pallet.'),'erro');
+        focoQR();
+      }else{
+        setStatus('🚨 '+((r&&r.erro)||'QR não encontrado.'),'erro');
+        focoQR();
+      }
+    }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+  }
+
+  // 2) Confirma -> registra a saída (transferência ou baixa)
+  async function confirmarSaida(){
+    if(!itemAtivo){ setStatus('Bipe um QR primeiro.','erro'); return; }
+    var tipo=val('tipo');
+    var destino=val('destino');
+    var op=val('operador');
+    if(!tipo){ setStatus('Escolha o tipo de saída.','erro'); return; }
+    if(/transfer/i.test(tipo) && !destino){ setStatus('Informe o destino da transferência.','erro'); try{document.getElementById('destino').focus();}catch(e){} return; }
+    if(op) ls('plast_operador', op);
+
+    if(!confirm('Confirmar '+tipo+(destino?(' ('+destino+')'):'')+' de '+itemAtivo.qtd+' un · '
+                +(itemAtivo.produto||'')+' (lote '+itemAtivo.lote+')?')) return;
+
+    var btn=document.getElementById('btnConfirmar');
+    btn.disabled=true; btn.textContent='Registrando…';
+    setStatus('Registrando saída…','info');
+    try{
+      var r=await getAPI('?acao=saida_pa'
+            +'&id='+encodeURIComponent(itemAtivo.id||val('qr'))
+            +'&tipo='+encodeURIComponent(tipo)
+            +'&destino='+encodeURIComponent(destino)
+            +'&resp='+encodeURIComponent(op));
+      if(r && r.ok){
+        setStatus(r.mensagem || '✔ Saída registrada.','ok');
+        historico.unshift({t:new Date(), txt:tipo+(destino?(' · '+destino):'')+' · '+(r.produto||'')+' · '+(r.qtd||'')+' un', cc:r.lote||itemAtivo.lote, ok:true});
+        document.getElementById('qr').value='';
+        document.getElementById('destino').value='';
+        esconderPainel();
+      }else{
+        setStatus('🚨 '+((r&&r.erro)||'Falha ao registrar a saída.'),'erro');
+        historico.unshift({t:new Date(), txt:((r&&r.erro)||'falha'), cc:itemAtivo.lote, ok:false});
+      }
+    }catch(e){ setStatus('Erro de conexão: '+e,'erro'); }
+    btn.disabled=false; btn.textContent='✔ Registrar saída';
+    renderHist(); focoQR();
+  }
+
+  function renderHist(){
+    var box=document.getElementById('hist');
+    if(!historico.length){ box.innerHTML='<div style="color:#aaa;padding:6px">(nenhuma ainda)</div>'; return; }
+    box.innerHTML='';
+    historico.slice(0,12).forEach(function(h){
+      var hh=('0'+h.t.getHours()).slice(-2)+':'+('0'+h.t.getMinutes()).slice(-2);
+      box.innerHTML+='<div class="hist"><span><span class="pill '+(h.ok?'g':'r')+'">'+(h.ok?'OK':'ERRO')+'</span> '+esc(h.txt)+'</span><span style="color:#999;font-family:monospace">'+esc(h.cc)+' · '+hh+'</span></div>';
+    });
+  }
+
+  /* ===== câmera (celular) ===== */
+  async function abrirCamera(){
+    if(!apiUrl()){ setStatus('Configure a URL da API primeiro.','erro'); return; }
+    if(typeof Html5Qrcode==='undefined'){ setStatus('Leitor de câmera não carregou (sem internet).','erro'); return; }
+    if(qrScanner) return;
+    document.getElementById('reader').style.display='block';
+    document.getElementById('btnParar').style.display='block';
+    document.getElementById('btnCam').disabled=true;
+    try{
+      qrScanner=new Html5Qrcode('reader');
+      await qrScanner.start({facingMode:'environment'},{fps:10,qrbox:240},
+        function(txt){ document.getElementById('qr').value=limparCodigo(txt); pararCamera(); resolverAgora(); },
+        function(){});
+    }catch(e){ setStatus('Não consegui abrir a câmera: '+e+'. Use https e permita a câmera.','erro'); pararCamera(); }
+  }
+  async function pararCamera(){
+    document.getElementById('btnParar').style.display='none';
+    document.getElementById('btnCam').disabled=false;
+    if(qrScanner){ try{ await qrScanner.stop(); await qrScanner.clear(); }catch(e){} qrScanner=null; }
+    document.getElementById('reader').style.display='none';
+    focoQR();
+  }
+</script>
+</body>
+</html>
