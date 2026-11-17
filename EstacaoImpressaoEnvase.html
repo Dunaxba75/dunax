@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11-c · seleção Zebra/Laser na estação</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11-d · Zebra/Laser + anti-repetição</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -300,7 +300,7 @@ function bpRequisicao(metodo, caminho, corpo) {
     method: metodo,
     headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
     body: corpo === undefined ? undefined : corpo
-  }, 20000).then(function (r) {
+  }, caminho === '/write' ? 60000 : 20000).then(function (r) {
     if (!r.ok) throw new Error('Browser Print respondeu ' + r.status);
     return r.text();
   });
@@ -584,10 +584,38 @@ function marcar(item, status, msg, tentativa) {
     });
 }
 
+/* ============ TRAVA ANTI-REPETIÇÃO (memória deste PC, 12 h) ============
+ * Se o pallet já foi mandado para a impressora e o status não chegou na planilha
+ * (sistema ocupado, internet caiu...), a fila entrega de novo. Aqui a estação
+ * reconhece e NÃO imprime outra vez: só grava IMPRESSO. Reimpressão pedida no
+ * Painel (status REIMPRIMIR) passa direto. */
+var MEM_HORAS = 12;
+function memLer() {
+  var m = {};
+  try { m = JSON.parse(localStorage.getItem('est_impressos') || '{}') || {}; } catch (e) { m = memRam; }
+  return m;
+}
+var memRam = {};
+function memChave(item) {
+  var d = item.dados || {};
+  return item.id + '|' + (d.qr_code_pallet || (d.etiquetas && d.etiquetas[0] && d.etiquetas[0].qr) || '');
+}
+function memJaImpresso(item) { var t = memLer()[memChave(item)]; return t && Date.now() - t < MEM_HORAS * 3600000; }
+function memGravar(item) {
+  var m = memLer(), limite = Date.now() - MEM_HORAS * 3600000;
+  for (var k in m) if (m.hasOwnProperty(k) && m[k] < limite) delete m[k];
+  m[memChave(item)] = Date.now(); memRam = m;
+  try { localStorage.setItem('est_impressos', JSON.stringify(m)); } catch (e) {}
+}
+
 function imprimirItem(item) {
   var d = item.dados || {};
   var tipo = String(item.tipo || 'ZEBRA').toUpperCase();
   var p;
+  if (!item.reimpressao && memJaImpresso(item)) {
+    registrarLog('INFO', 'Já impresso antes — não repetido (' + item.id + ' · ' + (d.lote || '') + '). Gravando IMPRESSO na planilha.');
+    return marcar(item, 'IMPRESSO', 'repetição evitada');
+  }
   // Zebra fora do ar: devolve o item para a fila sem gastar tentativa
   if (tipo !== 'LASER' && !zebra) {
     return marcar(item, 'LIBERAR', '');
@@ -608,9 +636,16 @@ function imprimirItem(item) {
 
   var resumo = tipo + ' · ' + (d.lote || (d.etiquetas && d.etiquetas[0] && d.etiquetas[0].lote) || '') + ' · ' + (d.descricao || '');
   return p.then(function () {
-    registrarLog('IMPRESSO', resumo);
+    memGravar(item);
+    registrarLog('IMPRESSO', resumo + (item.reimpressao ? ' (reimpressão)' : ''));
     return marcar(item, 'IMPRESSO', '');
   }).catch(function (e) {
+    // Zebra demorou a responder: pode ter impresso. Para não repetir, considera impresso.
+    if (e && /Sem resposta/.test(e.message || '') && tipo !== 'LASER') {
+      memGravar(item);
+      registrarLog('FALHA', resumo + ' — a Zebra demorou a responder. Considerado IMPRESSO para não repetir: CONFIRA se a etiqueta saiu (se não, use Reimprimir no Painel).');
+      return marcar(item, 'IMPRESSO', 'sem resposta da Zebra - conferir');
+    }
     registrarLog('FALHA', resumo + ' — ' + (e && e.message ? e.message : e) + ' (tenta de novo; na 3ª falha grava FALHA DE IMPRESSÃO)');
     if (tipo !== 'LASER') procurarZebra();
     return marcar(item, 'TENTAR', e && e.message ? e.message : String(e));
