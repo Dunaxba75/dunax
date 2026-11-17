@@ -46,7 +46,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 19/10 · moldes server.js</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11 · proteção laser + vigia</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -69,6 +69,8 @@
         <label>Laser desta estação (só para identificar)</label>
         <input id="cfgLaser" placeholder="Ex.: Samsung ML-371x">
         <div class="dica">A folha A4 sai na impressora <b>padrão do Windows</b>. Para trocar a laser, mude a impressora padrão neste PC.</div>
+        <label style="margin-top:8px;display:flex;gap:6px;align-items:center;"><input type="checkbox" id="cfgKiosk" style="width:auto;"> Laser sem janela (Chrome aberto pelo atalho --kiosk-printing)</label>
+        <div class="dica">Só marque se o TESTE LASER sai direto, <b>sem abrir a janela de impressão</b>. Desmarcado, esta estação nunca imprime pallets na laser (evita travar).</div>
       </div>
     </div>
     <div class="acoes">
@@ -76,6 +78,8 @@
       <button class="cinza" onclick="mostrarConfig(false)">FECHAR</button>
     </div>
   </div>
+
+  <div id="alertaLaser" style="display:none;background:#c0392b;color:#fff;padding:14px 18px;border-radius:10px;margin-bottom:14px;font-weight:bold;font-size:15px;line-height:1.4;"></div>
 
   <div class="cards">
     <div class="card" id="cardZebra"><div class="r">Zebra (Browser Print)</div><div class="v" id="txtZebra">Procurando...</div><div class="s" id="subZebra"></div></div>
@@ -185,18 +189,21 @@ var zebrasEncontradas = [];  // lista do Browser Print, para o seletor da config
 
 /* ===================== CONFIGURAÇÃO LOCAL DA ESTAÇÃO ================= */
 // Fica no navegador deste PC. Se o armazenamento falhar, segue com o que estiver na tela.
-var CFG = { nome: '', zebra: '', laser: '' };
+var CFG = { nome: '', zebra: '', laser: '', kiosk: false };
 function lerLocal(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
 function gravarLocal(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function carregarConfig() {
   CFG.nome = lerLocal('est_nome');
   CFG.zebra = lerLocal('est_zebra');
   CFG.laser = lerLocal('est_laser');
+  CFG.kiosk = lerLocal('est_kiosk') === '1';
   pintarConfig();
 }
 function pintarConfig() {
   document.getElementById('nomeEstacao').innerText = CFG.nome ? 'ESTAÇÃO ' + CFG.nome : 'SEM NOME';
   document.getElementById('txtLaser').innerText = CFG.laser || 'Pelo Chrome';
+  pintarCard('cardLaser', CFG.kiosk ? 'ok' : 'aviso');
+  document.querySelector('#cardLaser .s').innerText = CFG.kiosk ? 'Laser sem janela: LIGADA' : 'Pallets na laser BLOQUEADOS nesta estação (evita travar). Teste Laser libera se o Chrome estiver em kiosk.';
 }
 function limparNome(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9 _\-]/g, '').trim().slice(0, 30); }
 function mostrarConfig(abrir) {
@@ -204,6 +211,7 @@ function mostrarConfig(abrir) {
   if (abrir) {
     document.getElementById('cfgNome').value = CFG.nome;
     document.getElementById('cfgLaser').value = CFG.laser;
+    document.getElementById('cfgKiosk').checked = CFG.kiosk;
     preencherSeletorZebra();
   }
 }
@@ -225,7 +233,8 @@ function salvarConfig() {
   CFG.nome = nome;
   CFG.zebra = document.getElementById('cfgZebra').value;
   CFG.laser = String(document.getElementById('cfgLaser').value || '').trim();
-  gravarLocal('est_nome', CFG.nome); gravarLocal('est_zebra', CFG.zebra); gravarLocal('est_laser', CFG.laser);
+  CFG.kiosk = document.getElementById('cfgKiosk').checked;
+  gravarLocal('est_nome', CFG.nome); gravarLocal('est_zebra', CFG.zebra); gravarLocal('est_laser', CFG.laser); gravarLocal('est_kiosk', CFG.kiosk ? '1' : '0');
   pintarConfig();
   mostrarConfig(false);
   registrarLog('INFO', 'Configuração salva: ' + CFG.nome + (CFG.zebra ? ' · ' + CFG.zebra : ''));
@@ -261,14 +270,24 @@ function escHtml(v) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/* ===================== FETCH COM PRAZO (não deixa travar) ============= */
+function fetchComPrazo(url, opcoes, ms) {
+  opcoes = opcoes || {};
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  if (ctrl) opcoes.signal = ctrl.signal;
+  var t = setTimeout(function () { if (ctrl) ctrl.abort(); }, ms);
+  return fetch(url, opcoes).then(function (r) { clearTimeout(t); return r; },
+    function (e) { clearTimeout(t); throw new Error(e && e.name === 'AbortError' ? 'Sem resposta em ' + Math.round(ms / 1000) + ' s' : (e && e.message ? e.message : 'Falha de rede')); });
+}
+
 /* ======================== ZEBRA BROWSER PRINT ======================== */
 // O Browser Print aceita texto simples (sem preflight de CORS)
 function bpRequisicao(metodo, caminho, corpo) {
-  return fetch(bpBase + caminho, {
+  return fetchComPrazo(bpBase + caminho, {
     method: metodo,
     headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
     body: corpo === undefined ? undefined : corpo
-  }).then(function (r) {
+  }, 20000).then(function (r) {
     if (!r.ok) throw new Error('Browser Print respondeu ' + r.status);
     return r.text();
   });
@@ -288,7 +307,7 @@ function procurarZebra() {
       return Promise.resolve(false);
     }
     var porta = BP_PORTAS[i++];
-    return fetch(porta + '/available').then(function (r) {
+    return fetchComPrazo(porta + '/available', {}, 8000).then(function (r) {
       if (!r.ok) throw new Error();
       bpBase = porta;
       return r.json();
@@ -517,7 +536,7 @@ function imprimirLaser(d) {
       var img = doc.querySelector('img');
       var disparar = function () {
         setTimeout(function () {
-          try { iframe.contentWindow.focus(); iframe.contentWindow.print(); resolve('ok'); }
+          try { var t0 = Date.now(); iframe.contentWindow.focus(); iframe.contentWindow.print(); resolve(Date.now() - t0); }
           catch (e) { reject(e); }
         }, 300);
       };
@@ -531,7 +550,7 @@ function chamarApi(params) {
   params.token = TOKEN_API;
   var q = [];
   for (var k in params) if (params.hasOwnProperty(k)) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
-  return fetch(URL_API + '?' + q.join('&'), { method: 'GET', redirect: 'follow' })
+  return fetchComPrazo(URL_API + '?' + q.join('&'), { method: 'GET', redirect: 'follow' }, 45000)
     .then(function (r) { return r.json(); });
 }
 
@@ -546,6 +565,11 @@ function imprimirItem(item) {
   var p;
   // Zebra fora do ar: devolve o item para a fila sem gastar tentativa
   if (tipo !== 'LASER' && !zebra) {
+    return marcar(item, 'LIBERAR', '');
+  }
+  // LASER sem kiosk: a janela de impressão do Windows travaria a página. Não imprime, devolve à fila e avisa.
+  if (tipo === 'LASER' && !CFG.kiosk) {
+    mostrarAlertaLaser(true);
     return marcar(item, 'LIBERAR', '');
   }
   if (tipo === 'LASER') p = imprimirLaser(d);
@@ -568,6 +592,18 @@ function imprimirItem(item) {
   });
 }
 
+function mostrarAlertaLaser(mostrar) {
+  var a = document.getElementById('alertaLaser');
+  if (!mostrar) { a.style.display = 'none'; return; }
+  a.innerHTML = '⚠ O Painel Zebra está no modo <u>LASER</u>, mas esta estação não imprime na laser sem janela (ela travaria).<br>' +
+    'Os pallets estão AGUARDANDO. Para imprimir na Zebra: <u>Painel Zebra → Modo de impressão geral → ZEBRA</u>.<br>' +
+    '<span style="font-weight:normal;font-size:13px;">Para usar a laser: abra esta página pelo atalho com --kiosk-printing e clique em TESTE LASER (libera sozinho se não abrir janela).</span>';
+  a.style.display = 'block';
+}
+
+var ultimaConsultaOk = Date.now();
+var ocupadoDesde = 0;
+
 function verificarFila() {
   if (ocupado) return;
   if (URL_API.indexOf('COLE_AQUI') === 0) {
@@ -583,8 +619,11 @@ function verificarFila() {
     return;
   }
   ocupado = true;
+  ocupadoDesde = Date.now();
   chamarApi({ api: 'filaImpressao', estacao: CFG.nome, zebra: zebra ? zebra.name : '', laser: CFG.laser }).then(function (res) {
     if (!res || !res.ok) throw new Error(res && res.erro ? res.erro : 'Resposta inválida');
+    ultimaConsultaOk = Date.now();
+    if (String(res.tipo || '').toUpperCase() !== 'LASER' || CFG.kiosk) mostrarAlertaLaser(false);
     var itens = res.itens || [];
     if (res.emEspera) {
       document.getElementById('txtFila').innerText = res.motivo === 'OUTRA'
@@ -596,8 +635,13 @@ function verificarFila() {
     }
     document.getElementById('txtFila').innerText = res.pausado ? 'Pallets PAUSADOS no Painel Zebra' : (itens.length ? itens.length + ' para imprimir' : 'Em dia');
     document.getElementById('subFila').innerText = res.tipo ? 'Modo dos pallets: ' + res.tipo : '';
+    if (String(res.tipo || '').toUpperCase() === 'LASER' && !CFG.kiosk) {
+      mostrarAlertaLaser(true);
+      document.getElementById('txtFila').innerText = 'Modo LASER no Painel — pallets aguardando';
+      pintarCard('cardFila', 'erro');
+    }
     document.getElementById('subFila').innerText += ' · última consulta ' + horaAgora();
-    pintarCard('cardFila', res.pausado ? 'aviso' : 'ok');
+    if (!(String(res.tipo || '').toUpperCase() === 'LASER' && !CFG.kiosk)) pintarCard('cardFila', res.pausado ? 'aviso' : 'ok');
 
     // um de cada vez, na ordem em que chegaram
     var cadeia = Promise.resolve();
@@ -681,7 +725,12 @@ function ajustarEscuridao() {
 function testeLaser() {
   imprimirLaser({ descricao: 'TESTE DE IMPRESSÃO', data_fab: new Date().toLocaleDateString('pt-BR'), hora_fab: horaAgora(),
                   linha_envase: 'TESTE', lote: 'DB0000', qtd: '0', cod_prod: '0000', qr_code_pallet: 'TESTE' })
-    .then(function () { registrarLog('IMPRESSO', 'Teste Laser'); })
+    .then(function (ms) {
+      var kiosk = typeof ms === 'number' && ms < 2500;      // com janela, o print() só volta depois do clique
+      CFG.kiosk = kiosk; gravarLocal('est_kiosk', kiosk ? '1' : '0'); pintarConfig();
+      registrarLog('IMPRESSO', 'Teste Laser — ' + (kiosk ? 'saiu sem janela: laser LIBERADA para pallets nesta estação'
+        : 'abriu a janela de impressão: laser BLOQUEADA para pallets (abra pelo atalho --kiosk-printing para liberar)'));
+    })
     .catch(function (e) { registrarLog('FALHA', 'Teste Laser — ' + e.message); });
 }
 
@@ -690,6 +739,20 @@ carregarConfig();
 procurarZebra().then(function () { verificarFila(); });
 setInterval(function () { if (!pausado) verificarFila(); }, INTERVALO_MS);
 setInterval(function () { if (!zebra) procurarZebra(); }, 60000);
+
+// VIGIA: se uma consulta ficar presa, solta; se ficar muito tempo sem falar com o sistema, recarrega a página.
+setInterval(function () {
+  var agora = Date.now();
+  if (ocupado && agora - ocupadoDesde > 120000) {
+    ocupado = false;
+    registrarLog('INFO', 'Vigia: consulta presa há mais de 2 min — liberada');
+  }
+  if (!pausado && agora - ultimaConsultaOk > 300000 && navigator.onLine !== false) {
+    registrarLog('INFO', 'Vigia: 5 min sem resposta do sistema — recarregando a página');
+    ultimaConsultaOk = agora;                                   // evita recarregar em sequência
+    setTimeout(function () { location.reload(); }, 1500);
+  }
+}, 15000);
 </script>
 </body>
 </html>
