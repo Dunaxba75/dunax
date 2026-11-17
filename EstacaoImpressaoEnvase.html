@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11-d · Zebra/Laser + anti-repetição</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11-e · mais rápida (tambor primeiro)</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -187,7 +187,7 @@
 // URL da implantação do Apps Script da planilha App_Validador_QR_Caixas (termina em /exec)
 var URL_API = 'https://script.google.com/macros/s/AKfycbyiIBPZgDqtD7ftYrhGP5mCsx7HoazMFAiFjFrmE4cvvUwvV6k0zf1L64-P58aSuEyl/exec';
 var TOKEN_API = 'DUNAX-ENVASE-2026';         // o mesmo do ESTACAO.TOKEN no EstacaoImpressao.gs
-var INTERVALO_MS = 10000;                   // consulta a fila a cada 10 s
+var INTERVALO_MS = 6000;                    // consulta a fila a cada 6 s (e na hora, logo depois de imprimir)
 var NOME_ZEBRA_PREFERIDA = '';              // reserva: a Zebra é escolhida em ⚙ CONFIGURAR ESTAÇÃO
 var ESCURIDAO = 27;                         // 0 a 30 (mais alto = mais escuro) — igual ao AJUSTE IMPRESSORA.BAT
 var VELOCIDADE = 2;                         // 2 a 6 (mais baixo = mais escuro)
@@ -614,7 +614,8 @@ function imprimirItem(item) {
   var p;
   if (!item.reimpressao && memJaImpresso(item)) {
     registrarLog('INFO', 'Já impresso antes — não repetido (' + item.id + ' · ' + (d.lote || '') + '). Gravando IMPRESSO na planilha.');
-    return marcar(item, 'IMPRESSO', 'repetição evitada');
+    marcar(item, 'IMPRESSO', 'repetição evitada');
+    return Promise.resolve();
   }
   // Zebra fora do ar: devolve o item para a fila sem gastar tentativa
   if (tipo !== 'LASER' && !zebra) {
@@ -638,7 +639,8 @@ function imprimirItem(item) {
   return p.then(function () {
     memGravar(item);
     registrarLog('IMPRESSO', resumo + (item.reimpressao ? ' (reimpressão)' : ''));
-    return marcar(item, 'IMPRESSO', '');
+    marcar(item, 'IMPRESSO', '');            // grava em segundo plano: a próxima etiqueta já pode sair
+    return null;
   }).catch(function (e) {
     // Zebra demorou a responder: pode ter impresso. Para não repetir, considera impresso.
     if (e && /Sem resposta/.test(e.message || '') && tipo !== 'LASER') {
@@ -734,6 +736,7 @@ function verificarFila() {
     // um de cada vez, na ordem em que chegaram
     var cadeia = Promise.resolve();
     itens.forEach(function (it) { cadeia = cadeia.then(function () { return imprimirItem(it); }); });
+    if (itens.length) cadeia = cadeia.then(function () { setTimeout(verificarFila, 300); });   // tinha fila: busca o resto já
     return cadeia;
   }).catch(function (e) {
     document.getElementById('txtFila').innerText = 'Sem conexão com o sistema';
