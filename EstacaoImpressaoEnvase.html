@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11-e · mais rápida (tambor primeiro)</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 17/11-f · reimprimir + fila leve</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -572,6 +572,9 @@ function marcar(item, status, msg, tentativa) {
   tentativa = tentativa || 1;
   return chamarApi({ api: 'marcarImpressao', id: item.id, status: status, msg: msg || '' })
     .then(function (res) {
+      // IMPRESSO gravado na planilha: a memória anti-repetição deste item não é mais necessária.
+      // Assim, se alguém pedir Reimprimir (mesmo que o Painel só limpe o status), ele sai de novo.
+      if (res && res.ok && status === 'IMPRESSO') memApagar(item);
       if (res && res.ok) return res;
       throw new Error(res && res.erro ? res.erro : 'resposta inválida');
     })
@@ -601,6 +604,10 @@ function memChave(item) {
   return item.id + '|' + (d.qr_code_pallet || (d.etiquetas && d.etiquetas[0] && d.etiquetas[0].qr) || '');
 }
 function memJaImpresso(item) { var t = memLer()[memChave(item)]; return t && Date.now() - t < MEM_HORAS * 3600000; }
+function memApagar(item) {
+  var m = memLer(); delete m[memChave(item)]; memRam = m;
+  try { localStorage.setItem('est_impressos', JSON.stringify(m)); } catch (e) {}
+}
 function memGravar(item) {
   var m = memLer(), limite = Date.now() - MEM_HORAS * 3600000;
   for (var k in m) if (m.hasOwnProperty(k) && m[k] < limite) delete m[k];
@@ -730,7 +737,7 @@ function verificarFila() {
       document.getElementById('txtFila').innerText = 'Modo LASER no Painel — pallets aguardando';
       pintarCard('cardFila', 'erro');
     }
-    document.getElementById('subFila').innerText += ' · última consulta ' + horaAgora();
+    document.getElementById('subFila').innerText += ' · última consulta ' + horaAgora() + (res.ms !== undefined ? ' (' + (res.ms / 1000).toFixed(1) + ' s)' : '');
     if (!(String(res.tipo || '').toUpperCase() === 'LASER' && !CFG.kiosk)) pintarCard('cardFila', res.pausado ? 'aviso' : 'ok');
 
     // um de cada vez, na ordem em que chegaram
