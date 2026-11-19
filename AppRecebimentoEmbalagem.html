@@ -89,7 +89,7 @@
           <div><label>Data recebimento</label><input id="datarec" type="date" oninput="desenhar()"></div>
         </div>
         <div class="lin">
-          <div><label>Responsável</label><input id="resp" placeholder="DEBORA" oninput="desenhar()"></div>
+          <div><label>Responsável *</label><input id="resp" placeholder="obrigatório" oninput="ls('emb_resp',this.value);desenhar()"></div>
           <div><label>Situação</label><select id="sit" onchange="desenhar()"><option>APROVADO</option><option>REPROVADO</option><option>COM CONDICIONANTE</option></select></div>
           <div style="flex:0 0 120px"><label>RNC Nº</label><input id="rnc" oninput="desenhar()"></div>
         </div>
@@ -229,6 +229,7 @@ window.onload=function(){
   document.getElementById('zDark').value=zebraDark();
   document.getElementById('zSpeed').value=zebraSpeed();
   mostraAjuste();
+  document.getElementById('resp').value=ls('emb_resp')||'';   // lembra o último responsável neste PC
   document.getElementById('datarec').value=new Date().toISOString().slice(0,10);
   pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
   if(apiUrl()){ carregarItens(); carregarPalletCfg(); sugerirLote(); }
@@ -493,6 +494,7 @@ async function entradaComEtiqueta(it){
   var d=coletar();
   if(!d.material){ setStatus('Informe o material (texto grande).','erro'); return; }
   if(!(d.qtd>0)){ setStatus('Informe a quantidade.','erro'); return; }
+  if(!d.resp){ setStatus('Informe o RESPONSÁVEL — ele vai na etiqueta e no registro.','erro'); document.getElementById('resp').focus(); return; }
   setStatus('Registrando entrada…','info');
   // 1) entrada do TOTAL da NF, uma única vez
   var q='?acaoemb=receber&cod='+encodeURIComponent(d.cod)+'&qtd='+encodeURIComponent(d.qtd)
