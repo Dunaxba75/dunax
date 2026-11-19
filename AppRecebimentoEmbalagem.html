@@ -157,8 +157,48 @@
       </div>
     </div>
 
-    <!-- ======== PRÉVIA + CONFIG ======== -->
+    <!-- ======== IMPRESSORA + CONFIG ======== -->
     <div>
+      <div class="cartao" id="boxImp">
+        <h2>Impressora & ajuste do ribbon</h2>
+        <div style="margin-bottom:8px">Browser Print: <span id="pBP" class="pill n">—</span>
+          &nbsp; API Envase: <span id="pApi" class="pill n">—</span></div>
+        <div class="lin">
+          <div><button class="b-azul" style="width:100%" onclick="detectar()">🔌 Detectar impressora</button></div>
+          <div><button class="b-cinza" style="width:100%" onclick="imprimirTeste()">🖨️ Imprimir teste</button></div>
+        </div>
+        <div id="impInfo" class="mini">Abra esta página no PC onde o Zebra Browser Print está instalado.</div>
+
+        <div style="margin-top:14px;padding:12px;border:2px solid var(--laranja);border-radius:8px;background:#fff8f2">
+          <div style="font-weight:bold;color:var(--azul);font-size:13px">Escurecimento e velocidade</div>
+          <div class="mini" style="color:#8a5a12">Queimando ou borrando → baixe o escurecimento (ou a velocidade). Falhado/claro → aumente. Ajuste conforme o ribbon e faça uma etiqueta de teste.</div>
+          <div class="lin">
+            <div><label>Escurecimento (0–30)</label>
+              <input id="zDark" type="number" min="0" max="30" step="1" onchange="salvarAjuste()"></div>
+            <div><label>Velocidade (2–6 pol/s)</label>
+              <input id="zSpeed" type="number" min="2" max="6" step="1" onchange="salvarAjuste()"></div>
+          </div>
+          <div class="mini" id="ajusteInfo" style="margin-top:6px"></div>
+        </div>
+
+        <details style="margin-top:12px">
+          <summary>Configuração</summary>
+          <label>URL da API do Envase (/exec)</label>
+          <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+          <label>Host do Browser Print</label>
+          <input id="bpHost" value="http://127.0.0.1:9100">
+          <button class="b-azul" style="width:100%;margin-top:10px" onclick="salvarConfig()">Salvar</button>
+        </details>
+
+        <details style="margin-top:8px">
+          <summary>Ver ZPL gerado</summary>
+          <textarea id="zplOut" readonly></textarea>
+          <button class="b-cinza" style="width:100%;margin-top:8px" onclick="copiarZPL()">Copiar ZPL</button>
+        </details>
+      </div>
+    </div>
+  </div>
+
 
 <script>
 /* ===================== estado / config ===================== */
@@ -169,8 +209,18 @@ function setStatus(t,c){ var el=document.getElementById('status'); el.textConten
 function pill(id,t,c){ var el=document.getElementById(id); el.textContent=t; el.className='pill '+c; }
 function apiUrl(){ return (ls('emb_api')||'').trim().split('?')[0].split('#')[0]; }
 function bpHost(){ return (ls('emb_bp')||'http://127.0.0.1:9100').replace(/\/+$/,''); }
-function zebraDark(){ var v=ls('emb_dark'); if(v===null||String(v).trim()==='') return ''; var n=parseInt(v,10); return isNaN(n)?'':Math.max(0,Math.min(30,n)); }
-function zebraSpeed(){ var v=ls('emb_speed'); if(v===null||String(v).trim()==='') return ''; var n=parseInt(v,10); return isNaN(n)?'':Math.max(2,Math.min(8,n)); }
+var DARK_PADRAO=10, SPEED_PADRAO=4;   // valores do TEMPLATE_INSUMOS_G (~SD10, ^PR4)
+function zebraDark(){ var n=parseInt(ls('emb_dark'),10); return isNaN(n)?DARK_PADRAO:Math.max(0,Math.min(30,n)); }
+function zebraSpeed(){ var n=parseInt(ls('emb_speed'),10); return isNaN(n)?SPEED_PADRAO:Math.max(2,Math.min(6,n)); }
+function cfgZebra(){ var d=zebraDark(), s=zebraSpeed(); return '^PR'+s+','+s+'^MD0~SD'+('0'+d).slice(-2); }
+function mostraAjuste(){ var el=document.getElementById('ajusteInfo'); if(el) el.textContent='Em uso neste PC: escurecimento '+zebraDark()+' · velocidade '+zebraSpeed()+' pol/s (vai junto em toda etiqueta).'; }
+function salvarAjuste(){
+  ls('emb_dark', document.getElementById('zDark').value);
+  ls('emb_speed', document.getElementById('zSpeed').value);
+  document.getElementById('zDark').value=zebraDark(); document.getElementById('zSpeed').value=zebraSpeed();
+  mostraAjuste(); desenhar();
+  setStatus('Ajuste salvo: escurecimento '+zebraDark()+', velocidade '+zebraSpeed()+'. Imprima um teste para conferir.','ok');
+}
 function ehEntrada(){ return val('movimento')==='Entrada'; }
 
 window.onload=function(){
@@ -178,6 +228,7 @@ window.onload=function(){
   document.getElementById('bpHost').value=bpHost();
   document.getElementById('zDark').value=zebraDark();
   document.getElementById('zSpeed').value=zebraSpeed();
+  mostraAjuste();
   document.getElementById('datarec').value=new Date().toISOString().slice(0,10);
   pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
   if(apiUrl()){ carregarItens(); carregarPalletCfg(); sugerirLote(); }
@@ -186,12 +237,10 @@ window.onload=function(){
 function salvarConfig(){
   ls('emb_api', document.getElementById('apiUrl').value.trim());
   ls('emb_bp', document.getElementById('bpHost').value.trim());
-  ls('emb_dark', document.getElementById('zDark').value);
-  ls('emb_speed', document.getElementById('zSpeed').value);
   pill('pApi', apiUrl()?'configurada':'sem URL', apiUrl()?'g':'n');
   if(apiUrl()){ carregarItens(); sugerirLote(); }
   desenhar();   // regenera o ZPL/prévia com os novos valores na hora
-  setStatus('Configuração salva.'+(zebraDark()===''&&zebraSpeed()===''?' Escuridão/velocidade em Auto (painel da impressora).':''),'ok');
+  setStatus('Configuração salva.','ok');
 }
 
 /* ===================== API ===================== */
@@ -312,7 +361,7 @@ async function enviarZPL(zpl){
     throw new Error('Browser Print HTTP '+r.status+(t?(' — '+String(t).replace(/\s+/g,' ').slice(0,180)):'')); }
 }
 async function imprimirTeste(){
-  try{ await enviarZPL('^XA^CI28^FO60,60^A0N,60,60^FDTESTE DUNAX^FS^FO60,160^BQN,2,6^FDMA,TESTE^FS^XZ'); setStatus('Teste enviado.','ok'); }
+  try{ await enviarZPL('^XA^CI28'+cfgZebra()+'^PW831^LL1614^FO40,40^GB750,300,4^FS^FO70,80^A0N,60,50^FDTESTE DUNAX^FS^FO70,170^A0N,40,30^FDESCURECIMENTO '+zebraDark()+'  VELOC. '+zebraSpeed()+'^FS^FO70,230^A0N,40,30^FDTEXTO PEQUENO: LOTE 575525 NF 4555^FS^FO60,380^BQN,2,6^FDMA,TESTE^FS^XZ'); setStatus('Teste enviado.','ok'); }
   catch(e){ setStatus('Falha no teste: '+e.message,'erro'); }
 }
 
@@ -362,9 +411,7 @@ function txtB(x,y,h,w,t){ return '^FT'+x+','+y+'^A0B,'+h+','+w+'^FD'+t+'^FS\n'; 
 function buildZPL(d){
   var tk=token(d), nome=esc(d.material)||' ';
   var z='';
-  var dark=zebraDark(), spd=zebraSpeed(), cfg='';
-  if(spd!=='')  cfg+='^PR'+spd+','+spd;
-  if(dark!=='') cfg+='^MD0~SD'+('0'+dark).slice(-2);
+  var cfg=cfgZebra();   // escurecimento + velocidade do ajuste (sempre enviados)
   z+='^XA^CI28'+cfg+'\n^MMT\n^PW831\n^LL1614\n^LS0\n^LH0,0\n';
 
   // ===== linhas (uma de cada, sem sobreposição) =====
