@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal Central de Impressão — DUNAX Plásticos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{ --azul:#1F3A6E; --laranja:#F26B21; }
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:18px;background:#eef1f5;color:#222;max-width:860px;margin:0 auto;}
+  h1{font-size:21px;color:var(--azul);margin:0 0 2px;}
+  .sub{color:#666;font-size:13px;margin-bottom:14px;}
+  .cartao{background:#fff;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  .barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;margin-bottom:12px;}
+  .pill{padding:5px 10px;border-radius:20px;font-weight:bold;}
+  .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
+  label{display:block;font-size:12px;font-weight:bold;color:#555;margin:8px 0 4px;}
+  input{width:100%;padding:10px;font-size:15px;border:1px solid #c7ccd4;border-radius:7px;}
+  button{padding:12px 16px;font-size:15px;font-weight:bold;border:none;border-radius:8px;background:var(--laranja);color:#fff;cursor:pointer;}
+  button.sec{background:var(--azul);font-size:13px;padding:9px 12px;}
+  button:disabled{background:#aab;cursor:not-allowed;}
+  .status{padding:11px 13px;border-radius:7px;margin-top:10px;font-size:14px;line-height:1.4;}
+  .ok{background:#e6f4ea;color:#137333;} .erro{background:#fce8e6;color:#c5221f;} .info{background:#e8f0fe;color:#1a4b8e;}
+  .fila-item{display:flex;justify-content:space-between;align-items:center;border:1px solid #e3e7ee;border-radius:8px;padding:10px 12px;margin-top:8px;}
+  .fila-item .info strong{color:var(--azul);font-size:14px;display:block;word-break:break-all;}
+  .fila-item .info span{color:#777;font-size:12px;}
+  .tag{font-size:11px;font-weight:bold;padding:2px 8px;border-radius:12px;background:#eef;color:#336;margin-right:6px;}
+  .tag.pac{background:#fef0e6;color:#a4510f;}
+  .tag.mis{background:#fff3cd;color:#8a6d00;}
+  .tag.int{background:#ede7f6;color:#5e35b1;}
+  .linha{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+  .linha>div{flex:1;min-width:160px;}
+  h2{font-size:15px;color:var(--azul);margin:0 0 6px;border-bottom:1px solid #eef;padding-bottom:6px;}
+  details{margin-top:6px;font-size:13px;}
+  summary{cursor:pointer;font-weight:bold;color:var(--azul);}
+  .auto{display:flex;align-items:center;gap:8px;background:#e6f4ea;border:1px solid #bfe3c8;border-radius:8px;padding:8px 12px;margin-top:4px;flex-wrap:wrap;}
+  .auto label{margin:0;color:#137333;font-size:14px;display:flex;align-items:center;gap:6px;}
+  .auto input[type=checkbox]{width:20px;height:20px;}
+  .auto input[type=number]{width:62px;padding:6px;}
+  .auto .st{flex:1;text-align:right;color:#137333;font-size:12px;min-width:120px;}
+</style>
+</head>
+<body>
+  <h1>Terminal Central de Impressão</h1>
+  <div class="sub">Setor Plásticos — DUNAX · imprime a fila de todas as fases (mistura, preforma, tampa, pallet e pacote) na Zebra</div>
+
+  <div class="barra">
+    <span>Planilha: <span id="pApi" class="pill n">—</span></span>
+    <span>Impressora: <span id="pImp" class="pill n">—</span></span>
+    <span>Escuridão:</span>
+    <input id="escuridao" style="width:56px;padding:6px" value="15">
+    <span title="Velocidade de impressão em polegadas por segundo. Mais baixa = melhor definição.">Veloc.:</span>
+    <input id="velocidade" style="width:52px;padding:6px" value="4">
+    <span title="Desloca a etiqueta para a direita (dots). 8 dots = 1 mm.">Desloc. X:</span>
+    <input id="offX" style="width:56px;padding:6px" value="0">
+    <span title="Desloca a etiqueta para baixo (dots). 8 dots = 1 mm.">Y:</span>
+    <input id="offY" style="width:56px;padding:6px" value="0">
+    <button class="sec" onclick="imprimirTeste()">Teste</button>
+    <button class="sec" onclick="reconectar()">Reconectar</button>
+  </div>
+  <div class="sub" style="margin-top:-8px;margin-bottom:12px">Ajuste de posição: 8 dots = 1 mm. Para <b>descer</b> aumente o Y; para a direita, aumente o X. <b>Velocidade</b> menor (ex.: 2–3 pol/s) melhora a definição. Use o botão <b>Teste</b> (imprime uma moldura) para calibrar.</div>
+
+  <div class="cartao">
+    <h2>Fila de impressão</h2>
+    <div class="linha" style="margin-bottom:6px">
+      <div style="flex:0 0 auto"><button id="btnImprimir" onclick="imprimirPendentes()">Imprimir pendentes</button></div>
+      <div style="flex:0 0 auto"><button class="sec" onclick="carregarFila()">Atualizar fila</button></div>
+      <div style="flex:1;text-align:right;color:#777;font-size:12px" id="resumoFila"></div>
+    </div>
+
+    <!-- IMPRESSÃO AUTOMÁTICA: ligada, imprime sozinho sem ninguém clicar -->
+    <div class="auto">
+      <label><input type="checkbox" id="autoImp" onchange="toggleAuto()"> Impressão automática</label>
+      <span style="font-size:12px;color:#137333">a cada</span>
+      <input type="number" id="autoSeg" value="8" min="4" max="120" onchange="if(autoTimer)startAuto()">
+      <span style="font-size:12px;color:#137333">s</span>
+      <span class="st" id="autoStatus"></span>
+    </div>
+
+    <div id="listaFila"></div>
+    <div id="status" class="status info">Conectando…</div>
+  </div>
+
+  <div class="cartao">
+    <h2>Reimprimir por OP / Lote</h2>
+    <div class="linha" style="margin-bottom:6px">
+      <div style="flex:1"><input id="refReimp" placeholder="Digite a OP (ex.: OP-19112026-079) ou o lote/pallet"
+             style="width:100%;padding:11px;font-size:15px;border:1px solid #c7ccd4;border-radius:7px"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();reimprimirPorRef();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" onclick="reimprimirPorRef()">Reimprimir</button></div>
+    </div>
+    <div style="color:#777;font-size:12px">Reenfileira a etiqueta (status Pendente). Use quando a etiqueta se perdeu ou foi excluída por engano.</div>
+    <div id="msgReimp" style="font-size:13px;margin-top:6px"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Últimas impressões (reimpressão)</h2>
+    <div class="linha" style="margin-bottom:6px">
+      <div style="flex:1;color:#777;font-size:12px">Reimprime a mesma etiqueta (ex.: saiu ilegível ou se perdeu). Não altera o registro.</div>
+      <div style="flex:0 0 auto"><button class="sec" onclick="carregarHistorico()">Atualizar histórico</button></div>
+    </div>
+    <div id="listaHistorico"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Desmembrar pallet em pacotes</h2>
+    <label>Bipe, digite ou leia o QR do pallet (aceita o código curto)</label>
+    <div class="linha">
+      <div><input id="codPallet" placeholder="Ex.: PD20-09-0710261432-80" onkeydown="if(event.key==='Enter')desmembrar()"></div>
+      <div style="flex:0 0 auto"><button class="sec" id="btnLerQR" onclick="abrirScanner()"><i class="fas fa-qrcode"></i> Ler QR</button></div>
+      <div style="flex:0 0 auto"><button onclick="desmembrar()">Desmembrar</button></div>
+    </div>
+    <div id="reader" style="display:none;max-width:360px;margin-top:10px;border:1px solid #e3e7ee;border-radius:8px;overflow:hidden"></div>
+    <div id="boxPararScan" style="display:none;margin-top:8px"><button class="sec" onclick="pararScanner()"><i class="fas fa-stop"></i> Parar câmera</button></div>
+    <div id="statusDesm" class="status info" style="display:none"></div>
+    <div class="sub" style="margin-top:8px">Só funciona com pallet já liberado pela inspeção. Os pacotes gerados entram na fila acima. <b>Para a câmera funcionar</b>, abra o Terminal por <b>https</b> ou <b>localhost</b> e permita o acesso à câmera.</div>
+  </div>
+
+  <details>
+    <summary>Configuração da estação</summary>
+    <div class="cartao" style="margin-top:8px">
+      <label>URL da API (Web App /exec do Apps Script)</label>
+      <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <label>Endereço do Browser Print</label>
+      <input id="bpUrl" value="http://127.0.0.1:9100">
+      <div style="margin-top:10px"><button class="sec" onclick="salvarConfig()">Salvar e reconectar</button></div>
+    </div>
+  </details>
+
+<script>
+  var impressora = null;
+  var filaAtual = [];
+  var historicoAtual = [];
+  var autoTimer = null;       // timer da impressão automática
+  var autoRodando = false;    // trava anti-sobreposição de ciclos
+
+  function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+  function val(id){ return (document.getElementById(id).value||'').trim(); }
+  // URL padrão da API dos Plásticos (já vem configurada — o campo em "Configuração
+  // da estação" serve só para trocar, se a implantação mudar de endereço).
+  var TC_API_PADRAO='https://script.google.com/a/dulub.net/macros/s/AKfycbwksL1L7rJ_YetodPQaswNarvOATNbDuSg5un3Q-qUvIiE9NnPpB-WPCyGKuLFpsOAF/exec';
+  function apiUrl(){ return ((ls('tc_api')||'').trim() || TC_API_PADRAO); }
+  function bpUrl(){ return (ls('tc_bp')||'http://127.0.0.1:9100').trim(); }
+  function darkness(){ return Math.max(0, Math.min(30, Number(val('escuridao'))||15)); }
+  function sleep(ms){ return new Promise(function(r){setTimeout(r,ms);}); }
+  function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
+  function pill(id,txt,c){ var el=document.getElementById(id); el.textContent=txt; el.className='pill '+c; }
+
+  window.onload = function(){
+    document.getElementById('apiUrl').value = apiUrl();
+    document.getElementById('bpUrl').value = bpUrl();
+    document.getElementById('escuridao').value = ls('tc_md')||'15';
+    document.getElementById('velocidade').value = ls('tc_sp')||'4';
+    document.getElementById('offX').value = ls('tc_ox')||'0';
+    document.getElementById('offY').value = ls('tc_oy')||'0';
+    document.getElementById('autoSeg').value = ls('tc_autoseg')||'8';
+    reconectar();
+    // retoma a impressão automática se estava ligada nesta estação
+    if (ls('tc_auto')==='1'){ document.getElementById('autoImp').checked = true; startAuto(); }
+  };
+  function salvarConfig(){ ls('tc_api', val('apiUrl')); ls('tc_bp', val('bpUrl')); reconectar(); }
+  function reconectar(){ ls('tc_md', val('escuridao')); ls('tc_sp', val('velocidade')); ls('tc_ox', val('offX')); ls('tc_oy', val('offY')); detectarImpressora(); carregarFila(); carregarHistorico(); }
+  function offX(){ return Math.max(0, Math.min(2000, Math.round(Number(val('offX'))||0))); }
+  function offY(){ return Math.max(0, Math.min(2000, Math.round(Number(val('offY'))||0))); }
+  function vel(){ return Math.max(1, Math.min(14, Math.round(Number(val('velocidade'))||4))); }
+
+  /* ===== IMPRESSÃO AUTOMÁTICA ===== */
+  function toggleAuto(){
+    var on = document.getElementById('autoImp').checked;
+    ls('tc_auto', on ? '1' : '0');
+    if (on) startAuto(); else stopAuto();
+  }
+  function startAuto(){
+    stopAuto();
+    var seg = Math.max(4, Math.min(120, Number(val('autoSeg'))||8));
+    ls('tc_autoseg', String(seg));
+    document.getElementById('autoStatus').textContent = '● ligada — verificando a cada '+seg+'s';
+    autoTimer = setInterval(cicloAuto, seg*1000);
+    cicloAuto(); // roda já na hora de ligar
+  }
+  function stopAuto(){
+    if (autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+    document.getElementById('autoStatus').textContent = '';
+  }
+  async function cicloAuto(){
+    if (autoRodando) return;           // não sobrepõe um ciclo no outro
+    autoRodando = true;
+    try{
+      await carregarFila();
+      if (filaAtual.length){
+        if (!(await garantirImpressora())){
+          document.getElementById('autoStatus').textContent = '⚠ impressora não encontrada — abra o Browser Print';
+        } else {
+          await imprimirPendentes();
+          document.getElementById('autoStatus').textContent = '● ligada — última impressão '+new Date().toLocaleTimeString();
+        }
+      }
+    }catch(e){ /* mantém o loop rodando mesmo se um ciclo falhar */ }
+    finally{ autoRodando = false; }
+  }
+
+  /* ===== API ===== */
+  async function getAPI(params){
+    var r = await fetch(apiUrl()+params, {method:'GET'});
+    return await r.json();
+  }
+  async function postAPI(obj){
+    var r = await fetch(apiUrl(), {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(obj)});
+    return await r.json();
+  }
+
+  async function carregarFila(){
+    if(!apiUrl()){ pill('pApi','sem URL','r'); setStatus('Configure a URL da API em "Configuração da estação".','erro'); return; }
+    pill('pApi','conectando…','n'); setStatus('Carregando fila…','info');
+    try{
+      var d = await getAPI('?acao=fila');
+      if(!d.ok) throw new Error(d.erro||'resposta inválida');
+      filaAtual = d.itens||[];
+      renderFila();
+      pill('pApi','ok','g');
+      setStatus(filaAtual.length? ('Fila carregada: '+filaAtual.length+' etiqueta(s) pendente(s).') : 'Fila vazia. Nada pendente.', 'ok');
+    }catch(e){
+      pill('pApi','erro','r');
+      setStatus('Não consegui falar com a planilha. Verifique a URL da API e se o Web App está publicado como "Qualquer pessoa". '+e,'erro');
+    }
+  }
+
+  function renderFila(){
+    var box=document.getElementById('listaFila'); box.innerHTML='';
+    document.getElementById('resumoFila').textContent = filaAtual.length ? (filaAtual.length+' pendente(s)') : '';
+    filaAtual.forEach(function(it, i){
+      var l=it.label;
+      var titulo = it.tipo==='PACOTE' ? l.idPacote : l.id;
+      var desc;
+      if(it.tipo==='PACOTE')      desc = l.produto+' ('+(l.cor||'-')+') · pacote '+l.indice+'/'+l.total+' · '+l.qtd+' pç';
+      else if(it.tipo==='PALLET') desc = l.produto+' ('+(l.cor||'-')+') · '+l.formato+' · '+l.qtd+' pç · Insp.: '+(l.inspetor||'-');
+      else if(it.tipo==='MISTURA')desc = l.produto+' ('+(l.cor||'-')+') · '+l.qtd+' kg · Receita '+(l.receita||'-')+' · Enc.: '+(l.encarregado||'-');
+      else                         desc = l.produto+' ('+(l.cor||'-')+') · '+l.qtd+' pç · OP '+(l.op||'-');  // PREFORMA / TAMPA
+      var classeTag = it.tipo==='PACOTE' ? ' pac' : (it.tipo==='MISTURA' ? ' mis' : ((it.tipo==='PREFORMA'||it.tipo==='TAMPA') ? ' int' : ''));
+      var div=document.createElement('div'); div.className='fila-item';
+      div.innerHTML='<div class="info"><strong>'+titulo+'</strong><span><span class="tag'+classeTag+'">'+it.tipo+'</span>'+desc+'</span></div>';
+      var acoes=document.createElement('div'); acoes.style.flex='0 0 auto';
+      var b=document.createElement('button'); b.className='sec'; b.textContent='Imprimir';
+      b.onclick=(function(idx){return function(){ imprimirUm(idx); };})(i);
+      // Excluir: botão pequeno e em DOIS passos (1º clique "arma", 2º confirma),
+      // para evitar remover uma etiqueta da fila por clique errado no Imprimir.
+      var bx=document.createElement('button'); bx.className='sec'; bx.textContent='✕';
+      bx.title='Remover da fila (NÃO imprime)';
+      bx.style.cssText='margin-left:8px;background:#fff;color:#c5221f;border:1px solid #e0b4b4;min-width:40px;max-width:52px;padding:8px 0;font-size:14px;';
+      (function(idx, btn){
+        var armado=false, t=null;
+        function desarmar(){ armado=false; btn.textContent='✕'; btn.style.background='#fff'; btn.style.color='#c5221f'; btn.style.maxWidth='52px'; }
+        btn.onclick=function(){
+          if(!armado){
+            armado=true;
+            btn.textContent='Confirmar remoção ✕';
+            btn.style.background='#c5221f'; btn.style.color='#fff'; btn.style.maxWidth='170px';
+            t=setTimeout(desarmar, 3000);   // volta sozinho em 3s se não confirmar
+            return;
+          }
+          clearTimeout(t); desarmar(); cancelarUm(idx);
+        };
+      })(i, bx);
+      acoes.appendChild(b); acoes.appendChild(bx);
+      div.appendChild(acoes); box.appendChild(div);
+    });
+  }
+
+  // Remove uma etiqueta da fila sem imprimir (não volta).
+  async function cancelarUm(idx){
+    var it=filaAtual[idx];
+    var titulo = it.tipo==='PACOTE' ? it.label.idPacote : it.label.id;
+    var autoEstava = !!autoTimer;
+    if(autoEstava) stopAuto();                 // pausa o auto para não imprimir no meio
+    setStatus('Removendo '+titulo+' da fila…','info');
+    try{
+      var r = await postAPI({acao:'cancelar', idFila: it.idFila, motivo:'Removido no Terminal'});
+      if(!r.ok) throw new Error(r.erro||'falha');
+      setStatus('Removido da fila ✔ '+titulo+' (não será impresso)','ok');
+    }catch(e){ setStatus('Falha ao remover: '+e,'erro'); }
+    await carregarFila();
+    if(autoEstava){ document.getElementById('autoImp').checked=true; startAuto(); }  // religa o auto
+  }
+
+  /* ===== Reimprimir digitando a OP / Lote ===== */
+  async function reimprimirPorRef(){
+    var ref = (document.getElementById('refReimp').value||'').trim();
+    var msg = document.getElementById('msgReimp');
+    if(!ref){ msg.innerHTML='<span style="color:#c5221f">Digite a OP ou o lote.</span>'; return; }
+    if(!apiUrl()){ msg.innerHTML='<span style="color:#c5221f">Configure a URL da API em "Configuração da estação".</span>'; return; }
+    msg.innerHTML='Reenfileirando '+ref+'…';
+    try{
+      var r = await getAPI('?acao=reimprimir&ref='+encodeURIComponent(ref));
+      if(r && r.ok){
+        msg.innerHTML='<span style="color:#137333">'+(r.mensagem||'Reenfileirado ✔')+'</span>';
+        document.getElementById('refReimp').value='';
+        await carregarFila();
+      }else{
+        msg.innerHTML='<span style="color:#c5221f">'+((r&&r.erro)||'Não encontrado.')+'</span>';
+      }
+    }catch(e){ msg.innerHTML='<span style="color:#c5221f">Erro: '+e+'</span>'; }
+  }
+
+  /* ===== Histórico / Reimpressão ===== */
+  async function carregarHistorico(){
+    if(!apiUrl()){ return; }
+    try{
+      var d = await getAPI('?acao=impressos&limite=20');
+      historicoAtual = (d && d.ok) ? (d.itens||[]) : [];
+    }catch(e){ historicoAtual = []; }
+    renderHistorico();
+  }
+
+  function descItem(it){
+    var l=it.label;
+    if(it.tipo==='PACOTE')      return l.produto+' ('+(l.cor||'-')+') · pacote '+l.indice+'/'+l.total+' · '+l.qtd+' pç';
+    if(it.tipo==='PALLET')      return l.produto+' ('+(l.cor||'-')+') · '+l.formato+' · '+l.qtd+' pç';
+    if(it.tipo==='MISTURA')     return l.produto+' ('+(l.cor||'-')+') · '+l.qtd+' kg';
+    return l.produto+' ('+(l.cor||'-')+') · '+l.qtd+' pç';  // PREFORMA / TAMPA
+  }
+  function classeTagTipo(tipo){
+    return tipo==='PACOTE' ? ' pac' : (tipo==='MISTURA' ? ' mis' : ((tipo==='PREFORMA'||tipo==='TAMPA') ? ' int' : ''));
+  }
+
+  function renderHistorico(){
+    var box=document.getElementById('listaHistorico'); box.innerHTML='';
+    if(!historicoAtual.length){ box.innerHTML='<div style="color:#aaa;text-align:center;padding:8px;font-size:13px">(Nenhuma etiqueta impressa ainda)</div>'; return; }
+    historicoAtual.forEach(function(it, i){
+      var quando = it.dataImpressao ? ' · '+it.dataImpressao : '';
+      var div=document.createElement('div'); div.className='fila-item';
+      div.innerHTML='<div class="info"><strong>'+tituloItem(it)+'</strong><span><span class="tag'+classeTagTipo(it.tipo)+'">'+it.tipo+'</span>'+descItem(it)+quando+'</span></div>';
+      var b=document.createElement('button'); b.className='sec'; b.textContent='Reimprimir';
+      b.onclick=(function(idx){return function(){ reimprimirUm(idx); };})(i);
+      div.appendChild(b); box.appendChild(div);
+    });
+  }
+
+  async function reimprimirUm(idx){
+    if(!(await garantirImpressora())){ setStatus('Impressora não encontrada. Abra o Browser Print e Reconectar.','erro'); return; }
+    var it=historicoAtual[idx];
+    setStatus('Reimprimindo '+tituloItem(it)+'…','info');
+    try{ await enviarItem(it); setStatus('Reimpresso ✔ '+tituloItem(it),'ok'); }
+    catch(e){ setStatus('Falha ao reimprimir: '+e,'erro'); }
+  }
+
+  /* ===== Impressora ===== */
+  async function detectarImpressora(){
+    pill('pImp','procurando…','n'); impressora=null;
+    try{ var r=await fetch(bpUrl()+'/default'); if(r.ok){ var dev=await r.json(); if(dev&&(dev.uid||dev.name)){ impressora=dev; return pill('pImp','ok','g'); } } }catch(e){}
+    try{ var r2=await fetch(bpUrl()+'/available'); if(r2.ok){ var l=await r2.json(); var arr=l.printer||l.device||l; if(arr&&arr.length){ impressora=arr[0]; return pill('pImp','ok','g'); } } }catch(e){}
+    pill('pImp','não achei','r');
+  }
+  async function enviarZPL(zpl){
+    var r=await fetch(bpUrl()+'/write',{method:'POST',headers:{'Content-Type':'application/json;charset=UTF-8'},body:JSON.stringify({device:impressora,data:zpl})});
+    if(!r.ok) throw new Error('Browser Print status '+r.status);
+  }
+
+  /* ===== Templates ZPL (95x50 @ 8dpmm) ===== */
+  function cab(md){ return "^XA^CI28^MMT^PW760^LL400^MNY^PR"+vel()+"^LH"+offX()+","+offY()+"^MD"+md; }
+  function zplTeste(md){
+    var z = cab(md);
+    z += "^FO4,4^GB752,392,3^FS";                                  // moldura externa (vê corte)
+    z += "^FO30,30^A0N,34,34^FDTESTE DE POSICAO^FS";
+    z += "^FO30,80^A0N,26,26^FDX="+offX()+"  Y="+offY()+"  Vel="+vel()+" ips^FS";
+    z += "^FO30,120^A0N,22,22^FDSe a moldura cortar em cima, aumente o Y.^FS";
+    z += "^FO30,150^A0N,22,22^FDDUNAX - Plasticos^FS";
+    z += "^FO300,240^BQN,2,6^FDMA,TESTE^FS";     // QR dentro da área útil (não corta)
+    z += "^FO30,360^A0N,20,20^FDBorda = limite da etiqueta^FS";
+    z += "^XZ";
+    return z;
+  }
+  async function imprimirTeste(){
+    ls('tc_ox', val('offX')); ls('tc_oy', val('offY')); ls('tc_sp', val('velocidade'));
+    if(!(await garantirImpressora())){ setStatus('Impressora não encontrada. Abra o Browser Print e Reconectar.','erro'); return; }
+    setStatus('Imprimindo etiqueta de teste (X='+offX()+', Y='+offY()+', Vel='+vel()+')…','info');
+    try{ await enviarZPL(zplTeste(darkness())); setStatus('Teste enviado. Ajuste X/Y e repita até enquadrar.','ok'); }
+    catch(e){ setStatus('Falha no teste: '+e,'erro'); }
+  }
+  function zplPallet(f, md){
+    var z = cab(md);
+    z += "^FO20,14^A0N,30,30^FDDUNAX  -  ETIQUETA DE PALLET^FS";
+    z += "^FO25,274^A0N,22,22^FDCODIGO CURTO^FS";
+    z += "^FO25,298^A0N,48,48^FD"+(f.codCurto||'')+"^FS";
+    z += "^FO260,78^A0N,32,32^FD"+f.produto+"^FS";
+    z += "^FO260,116^A0N,24,24^FDCor: "+(f.cor||'-')+"^FS";
+    z += "^FO260,148^A0N,24,24^FDFormato: "+(f.formato||'-')+"^FS";
+    z += "^FO260,184^A0N,26,26^FDQtd:^FS";
+    z += "^FO325,178^A0N,44,44^FD"+f.qtd+" UN^FS";
+    z += "^FO260,236^A0N,22,22^FDLote: "+f.id+"^FS";
+    z += "^FO260,262^A0N,22,22^FDMaq.: "+(f.maq||'-')+"^FS";
+    z += "^FO260,288^A0N,22,22^FDOp.: "+(f.operador||'-')+"^FS";
+    z += "^FO260,314^A0N,22,22^FDInsp.: "+(f.inspetor||'-')+"^FS";
+    z += "^FO260,340^A0N,22,22^FD"+(f.dataHora||'')+"^FS";
+    z += "^FO30,82^BQN,2,7^FDMA,"+f.id+"^FS";
+    z += "^FO20,54^GB720,3,3^FS^FO20,366^GB720,2,2^FS^XZ";
+    return z;
+  }
+  function zplPacote(f, md){
+    var z = cab(md);
+    z += "^FO20,14^A0N,30,30^FDDUNAX  -  ETIQUETA DE PACOTE^FS";
+    z += "^FO25,274^A0N,22,22^FDPACOTE^FS";
+    z += "^FO25,298^A0N,46,46^FD"+f.indice+"/"+f.total+"^FS";
+    z += "^FO260,78^A0N,32,32^FD"+f.produto+"^FS";
+    z += "^FO260,116^A0N,24,24^FDCor: "+(f.cor||'-')+"^FS";
+    z += "^FO260,150^A0N,26,26^FDQtd:^FS";
+    z += "^FO325,144^A0N,44,44^FD"+f.qtd+" UN^FS";
+    z += "^FO260,206^A0N,22,22^FDPacote: "+f.idPacote+"^FS";
+    z += "^FO260,232^A0N,22,22^FDPallet: "+f.idPallet+"^FS";
+    z += "^FO260,258^A0N,22,22^FDOp.: "+(f.operador||'-')+"^FS";
+    z += "^FO260,284^A0N,22,22^FDInsp.: "+(f.inspetor||'-')+"^FS";
+    z += "^FO260,310^A0N,22,22^FD"+(f.dataHora||'')+"^FS";
+    z += "^FO30,82^BQN,2,7^FDMA,"+f.idPacote+"^FS";
+    z += "^FO20,54^GB720,3,3^FS^FO20,366^GB720,2,2^FS^XZ";
+    return z;
+  }
+
+  function zplMistura(f, md){
+    var z = cab(md);
+    z += "^FO20,14^A0N,30,30^FDDUNAX  -  ETIQUETA DE MISTURA^FS";
+    z += "^FO25,274^A0N,22,22^FDBATELADA (kg)^FS";
+    z += "^FO25,298^A0N,48,48^FD"+(f.qtd||0)+" KG^FS";
+    z += "^FO260,78^A0N,32,32^FD"+f.produto+"^FS";
+    z += "^FO260,116^A0N,24,24^FDCor: "+(f.cor||'-')+"^FS";
+    z += "^FO260,148^A0N,24,24^FDReceita: "+(f.receita||'-')+"^FS";
+    z += "^FO260,180^A0N,24,24^FDBase: "+(f.base||'-')+"^FS";
+    z += "^FO260,220^A0N,22,22^FDLote: "+f.id+"^FS";
+    z += "^FO260,246^A0N,22,22^FDEnc.: "+(f.encarregado||'-')+"^FS";
+    z += "^FO260,272^A0N,22,22^FD"+(f.dataHora||'')+"^FS";
+    z += "^FO30,82^BQN,2,7^FDMA,"+f.id+"^FS";
+    z += "^FO20,54^GB720,3,3^FS^FO20,366^GB720,2,2^FS^XZ";
+    return z;
+  }
+  function zplIntermediario(f, md, rotulo){
+    var z = cab(md);
+    z += "^FO20,14^A0N,28,28^FDDUNAX  -  "+rotulo+"^FS";
+    z += "^FO25,274^A0N,22,22^FDINTERMEDIARIO^FS";
+    z += "^FO25,298^A0N,46,46^FD"+(f.qtd||0)+" UN^FS";
+    z += "^FO260,78^A0N,32,32^FD"+f.produto+"^FS";
+    z += "^FO260,116^A0N,24,24^FDCor: "+(f.cor||'-')+"^FS";
+    z += "^FO260,150^A0N,26,26^FDQtd:^FS";
+    z += "^FO325,144^A0N,44,44^FD"+(f.qtd||0)+" UN^FS";
+    z += "^FO260,206^A0N,22,22^FDLote: "+f.id+"^FS";
+    z += "^FO260,232^A0N,22,22^FDOP: "+(f.op||'-')+"^FS";
+    z += "^FO260,258^A0N,22,22^FD"+(f.dataHora||'')+"^FS";
+    z += "^FO30,82^BQN,2,7^FDMA,"+f.id+"^FS";
+    z += "^FO20,54^GB720,3,3^FS^FO20,366^GB720,2,2^FS^XZ";
+    return z;
+  }
+
+  /* ===== Impressão ===== */
+  async function garantirImpressora(){ if(!impressora){ await detectarImpressora(); } return !!impressora; }
+
+  function zplDoItem(it){
+    var md=darkness();
+    if(it.tipo==='PACOTE')   return zplPacote(it.label, md);
+    if(it.tipo==='MISTURA')  return zplMistura(it.label, md);
+    if(it.tipo==='PREFORMA') return zplIntermediario(it.label, md, 'PREFORMA');
+    if(it.tipo==='TAMPA')    return zplIntermediario(it.label, md, 'TAMPA SEM SELO');
+    return zplPallet(it.label, md);
+  }
+  function tituloItem(it){
+    var l=it.label; return it.tipo==='PACOTE' ? l.idPacote : l.id;
+  }
+  async function enviarItem(it){  // só envia o ZPL (sem mexer no registro)
+    var zpl=zplDoItem(it); var copias=it.copias||1;
+    for(var c=0;c<copias;c++){ await enviarZPL(zpl); await sleep(300); }
+  }
+  async function imprimirItem(it){  // imprime E marca como impresso
+    await enviarItem(it);
+    await postAPI({acao:'marcarImpresso', idFila: it.idFila});
+  }
+
+  async function imprimirUm(idx){
+    if(!(await garantirImpressora())){ setStatus('Impressora não encontrada. Abra o Browser Print e Reconectar.','erro'); return; }
+    var it=filaAtual[idx];
+    setStatus('Imprimindo '+(it.tipo==='PACOTE'?it.label.idPacote:it.label.id)+'…','info');
+    try{ await imprimirItem(it); setStatus('Impresso ✔','ok'); await carregarFila(); await carregarHistorico(); }
+    catch(e){ setStatus('Falha ao imprimir: '+e,'erro'); }
+  }
+
+  async function imprimirPendentes(){
+    if(!filaAtual.length){ setStatus('Nada pendente.','info'); return; }
+    if(!(await garantirImpressora())){ setStatus('Impressora não encontrada. Abra o Browser Print e Reconectar.','erro'); return; }
+    var btn=document.getElementById('btnImprimir'); btn.disabled=true;
+    var total=filaAtual.length, ok=0;
+    for(var i=0;i<filaAtual.length;i++){
+      var it=filaAtual[i];
+      setStatus('Imprimindo '+(i+1)+' de '+total+'…','info');
+      try{ await imprimirItem(it); ok++; }
+      catch(e){ setStatus('Parou no item '+(i+1)+': '+e+'. Já impressos: '+ok+'.','erro'); btn.disabled=false; await carregarFila(); return; }
+    }
+    btn.disabled=false;
+    setStatus('Pronto! '+ok+' etiqueta(s) impressa(s).','ok');
+    await carregarFila();
+    await carregarHistorico();
+  }
+
+  /* ===== Leitura de QR (câmera do celular/webcam) ===== */
+  var qrScanner = null;
+
+  async function abrirScanner(){
+    var elErr = document.getElementById('statusDesm');
+    if(typeof Html5Qrcode === 'undefined'){
+      elErr.style.display='block'; elErr.className='status erro';
+      elErr.textContent='Leitor de QR não carregou (sem internet para o CDN). Digite o código manualmente.';
+      return;
+    }
+    if(qrScanner){ return; } // já aberto
+    document.getElementById('reader').style.display='block';
+    document.getElementById('boxPararScan').style.display='block';
+    try{
+      qrScanner = new Html5Qrcode('reader');
+      await qrScanner.start(
+        { facingMode: 'environment' },           // câmera traseira no celular
+        { fps: 10, qrbox: 220 },
+        function(txt){ onQRDecodificado(txt); },  // sucesso
+        function(){}                              // ignora "não encontrou neste frame"
+      );
+    }catch(e){
+      elErr.style.display='block'; elErr.className='status erro';
+      elErr.textContent='Não consegui abrir a câmera: '+e+'. Use https/localhost e permita a câmera no navegador.';
+      await pararScanner();
+    }
+  }
+
+  async function pararScanner(){
+    document.getElementById('boxPararScan').style.display='none';
+    if(qrScanner){
+      try{ await qrScanner.stop(); await qrScanner.clear(); }catch(e){}
+      qrScanner = null;
+    }
+    document.getElementById('reader').style.display='none';
+  }
+
+  async function onQRDecodificado(txt){
+    var cod = String(txt||'').trim();
+    // O QR da etiqueta pode vir com o prefixo de modo "MA," do ZPL — remove se existir.
+    if(cod.toUpperCase().indexOf('MA,') === 0) cod = cod.substring(3).trim();
+    document.getElementById('codPallet').value = cod;
+    await pararScanner();
+    var el=document.getElementById('statusDesm'); el.style.display='block'; el.className='status info';
+    el.textContent='QR lido: '+cod+' — processando desmembramento…';
+    desmembrar();
+  }
+
+  /* ===== Desmembramento ===== */
+  async function desmembrar(){
+    var cod=val('codPallet');
+    var el=document.getElementById('statusDesm'); el.style.display='block';
+    if(!cod){ el.className='status erro'; el.textContent='Informe o código do pallet.'; return; }
+    el.className='status info'; el.textContent='Processando…';
+    try{
+      // aceita código curto (2 letras + 4 dígitos): resolve para o ID do pallet
+      var alvo=cod;
+      if(/^[A-Za-z]{2}\d{4}$/.test(cod)){
+        var b=await getAPI('?acao=pallet&id='+encodeURIComponent(cod.toUpperCase()));
+        if(b.ok && b.pallet) alvo=b.pallet.ID_Pallet;
+      }
+      var d=await postAPI({acao:'desmembrar', idPallet: alvo});
+      if(!d.ok) throw new Error(d.erro||'falha');
+      el.className='status ok'; el.textContent='Gerados '+d.total+' pacotes ('+d.pecasPorPacote+' pç cada). Entraram na fila acima.';
+      document.getElementById('codPallet').value='';
+      await carregarFila();
+    }catch(e){ el.className='status erro'; el.textContent='Erro: '+e; }
+  }
+</script>
+</body>
+</html>
