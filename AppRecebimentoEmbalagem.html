@@ -29,8 +29,7 @@
   .pill{font-size:11px;font-weight:bold;padding:3px 9px;border-radius:20px}
   .pill.g{background:#e6f4ea;color:#137333;} .pill.r{background:#fce8e6;color:#c5221f;} .pill.n{background:#eceff3;color:#667;}
   .prev{background:#fff;border:1px solid #e3e7ee;border-radius:8px;padding:12px;}
-  .etq{width:100%;aspect-ratio:831/1614;max-width:250px;margin:0 auto;border:1px solid #bbb;border-radius:6px;position:relative;overflow:hidden;background:#fff;}
-  .hist{font-size:12.5px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .hist{font-size:12.5px;border-top:1px solid #eef;padding:7px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
   details{margin-top:4px;font-size:13px} summary{cursor:pointer;font-weight:bold;color:var(--azul2)}
   textarea{width:100%;height:150px;font-family:monospace;font-size:11px;border:1px solid #c7ccd4;border-radius:7px;padding:8px}
   .mini{font-size:11px;color:#888;margin-top:3px}
@@ -160,43 +159,6 @@
 
     <!-- ======== PRÉVIA + CONFIG ======== -->
     <div>
-      <div class="cartao" id="boxPrev">
-        <h2>Prévia da etiqueta (105 × 202 mm)</h2>
-        <div class="prev"><div class="etq" id="etq"></div></div>
-        <div class="mini" style="text-align:center">QR = entrada no estoque por bipe</div>
-      </div>
-
-      <div class="cartao" id="boxImp">
-        <h2>Impressora & conexões</h2>
-        <div style="margin-bottom:8px">Browser Print: <span id="pBP" class="pill n">—</span>
-          &nbsp; API Envase: <span id="pApi" class="pill n">—</span></div>
-        <div class="lin">
-          <div><button class="b-azul" style="width:100%" onclick="detectar()">🔌 Detectar impressora</button></div>
-          <div><button class="b-cinza" style="width:100%" onclick="imprimirTeste()">Imprimir teste</button></div>
-        </div>
-        <div id="impInfo" class="mini">Abra esta página no PC onde o Zebra Browser Print está instalado.</div>
-
-        <details style="margin-top:12px">
-          <summary>Configuração</summary>
-          <label>URL da API do Envase (/exec)</label>
-          <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec">
-          <label>Host do Browser Print</label>
-          <input id="bpHost" value="http://127.0.0.1:9100">
-          <div class="lin">
-            <div><label>Escurecimento (0–30)</label><input id="zDark" type="number" min="0" max="30" placeholder="Auto (painel)"></div>
-            <div><label>Velocidade (2–6 ips)</label><input id="zSpeed" type="number" min="2" max="6" placeholder="Auto (painel)"></div>
-          </div>
-          <button class="b-azul" style="width:100%;margin-top:10px" onclick="salvarConfig()">Salvar</button>
-        </details>
-
-        <details style="margin-top:8px">
-          <summary>Ver ZPL gerado</summary>
-          <textarea id="zplOut" readonly></textarea>
-          <button class="b-cinza" style="width:100%;margin-top:8px" onclick="copiarZPL()">Copiar ZPL</button>
-        </details>
-      </div>
-    </div>
-  </div>
 
 <script>
 /* ===================== estado / config ===================== */
@@ -313,7 +275,6 @@ function trocarMov(){
   var ent=ehEntrada();
   document.getElementById('secEntrada').classList.toggle('hide', !ent);
   document.getElementById('secSaida').classList.toggle('hide', ent);
-  document.getElementById('boxPrev').classList.toggle('hide', !ent);
   document.getElementById('boxImp').classList.toggle('hide', !ent);
   var b=document.getElementById('btnAcao'), mov=val('movimento');
   if(ent){ var imp=document.getElementById('imprimir'); var pr=!imp||imp.checked;
@@ -389,105 +350,87 @@ function quebraNome(s){
   }
   return [ words.slice(0,best+1).join(' '), words.slice(best+1).join(' ') ];
 }
+// ====== LAYOUT = TEMPLATE_INSUMOS_G.prn (ZebraDesigner) + QR para o bipe ======
+// Rótulo 105x202 mm @203dpi = 831 x 1614 dots. Texto em ^A0B (lê de baixo p/ cima).
+// ESP = espessura das linhas (template usa 8; 4 economiza ribbon e evita "queimar").
+var ESP=4, ADV=0.50;   // ADV só p/ estimar se um valor longo precisa encolher
+function fitW(txt, maxLen, wMax, wMin){
+  var n=Math.max(1,String(txt||'').length);
+  return Math.max(wMin||18, Math.min(wMax, Math.floor(maxLen/(ADV*n))));
+}
+function txtB(x,y,h,w,t){ return '^FT'+x+','+y+'^A0B,'+h+','+w+'^FD'+t+'^FS\n'; }
 function buildZPL(d){
   var tk=token(d), nome=esc(d.material)||' ';
   var z='';
   var dark=zebraDark(), spd=zebraSpeed(), cfg='';
   if(spd!=='')  cfg+='^PR'+spd+','+spd;
-  if(dark!=='') cfg+='^MD0~SD'+('0'+dark).slice(-2); // garante 2 dígitos (ex: ~SD03) e zera offset ^MD
-  z+='^XA^CI28'+cfg+'\n^PW831\n^LL1614\n^LS0\n';
+  if(dark!=='') cfg+='^MD0~SD'+('0'+dark).slice(-2);
+  z+='^XA^CI28'+cfg+'\n^MMT\n^PW831\n^LL1614\n^LS0\n^LH0,0\n';
 
-  // ===== moldura + coluna de identificação (SEM LINHAS DUPLICADAS e espessura 2 p/ não queimar ribbon) =====
-  z+='^FO8,8^GB815,1598,2^FS\n';                // Moldura externa única (espessura 2)
-  z+='^FO289,8^GB0,1598,2^FS\n';                // Apenas 1 linha vertical em X=289 (sem sobrepor retângulo!)
-  z+='^FO45,22^BQN,2,6^FDMA,'+tk+'^FS\n';       // QR Code nos 30mm
-  z+='^FO8,248^GB281,0,2^FS\n';                 // Divisória do QR em 248
-  z+='^FT42,1580^A0B,34,16^FDIDENTIFICAÇÃO DE MATERIAL^FS\n';
-  if(d.seq) z+='^FT282,1585^A0B,48,30^FDETIQ '+esc(d.seq)+'^FS\n';
+  // ===== linhas (uma de cada, sem sobreposição) =====
+  var E=ESP;
+  z+='^FO10,11^GB809,1588,'+E+'^FS\n';           // moldura externa
+  z+='^FO283,11^GB0,1588,'+E+'^FS\n';            // borda da coluna IDENTIFICAÇÃO
+  z+='^FO283,447^GB536,0,'+E+'^FS\n';            // base da faixa DATA RECEBIMENTO
+  [376,495,593,706].forEach(function(x){ z+='^FO'+x+',447^GB0,1152,'+E+'^FS\n'; }); // divisões das linhas de campos
+  z+='^FO283,1352^GB536,0,'+E+'^FS\n';           // rótulo | valor
+  z+='^FO376,875^GB332,0,'+E+'^FS\n';            // meio das linhas 2-4 (rótulo do 2º campo)
+  z+='^FO376,704^GB332,0,'+E+'^FS\n';            // meio das linhas 2-4 (valor do 2º campo)
 
-  // ----- nome do produto: MÁXIMO TAMANHO POSSÍVEL na coluna, mantendo ESCALONAMENTO 100% (NAT=1.3) -----
-  var len=Math.max(1,nome.length);
-  var LMAT=1320, WMAX=170, CY=927, NAT=1.3, ADV=0.53;        // LMAT=1320 (~165mm); ADV=0.53 aproveita toda a extensão
-  var LLIM=46, RLIM=(d.seq?236:282), AW=RLIM-LLIM;           // Usa toda a largura livre (190 dots c/ ETIQ ou 236 s/ ETIQ)
-  var wm=Math.max(18, Math.min(Math.floor(LMAT/(ADV*len)), Math.floor(AW/NAT), WMAX));
-  var hm=Math.round(wm*NAT);                                  // 100%: altura proporcional à largura (sem achatar)
-  var matX=Math.round(LLIM + hm*0.82);                        // encostado próximo à margem esquerda ("IDENTIFICAÇÃO DE MATERIAL")
-  var compReal=len*wm*ADV;
-  var by=Math.min(1592, Math.max(Math.round(258+compReal), Math.round(CY+compReal/2))); // centralizado entre 248 e 1606
-  z+='^FT'+matX+','+by+'^A0B,'+hm+','+wm+'^FD'+nome+'^FS\n';
+  // ===== coluna IDENTIFICAÇÃO DE MATERIAL =====
+  z+='^FO60,22^BQN,2,6^FDMA,'+tk+'^FS\n';        // QR (bipe de entrada/reimpressão) no topo da coluna
+  z+=txtB(71,1576,42,19,'IDENTIFICAÇÃO DE MATERIAL');
+  var info='QTD: '+esc(d.qtd)+(d.seq?('   ETIQ '+esc(d.seq)):'');
+  z+=txtB(71,900,42,fitW(info,650,26,16),info);   // qtd + nº da etiqueta na mesma linha do título
 
-  // ===== banda superior: QTD + DATA RECEBIMENTO =====
-  z+='^FO289,445^GB534,0,2^FS\n';
-  z+='^FO585,8^GB0,437,2^FS\n';
-  var qv=esc(d.qtd), wQ=Math.max(46,Math.min(90,Math.floor(380/Math.max(1,String(qv).length)))), hQ=Math.round(wQ*1.4);
-  var dv=dBR(d.datarec), wDb=Math.max(42,Math.min(66,Math.floor(380/Math.max(1,String(dv).length))));
-  var wD=Math.min(Math.round(wDb*1.15), Math.floor(428/Math.max(1,String(dv).length))), hD=Math.round(wD*1.45);
-  z+='^FT345,436^A0B,40,24^FDQTD^FS\n';
-  z+='^FT'+Math.round(437+hQ/2)+',436^A0B,'+hQ+','+wQ+'^FD'+qv+'^FS\n';
-  z+='^FT800,436^A0B,40,22^FDDATA RECEBIMENTO^FS\n';
-  z+='^FT'+Math.round(650+hD/2)+',436^A0B,'+hD+','+wD+'^FD'+dv+'^FS\n';
-
-  // ===== grade de campos: apenas as 3 linhas internas (sem duplicar 289 e 819!) =====
-  var gx=[289,422,554,686,819];
-  for(var c=1;c<gx.length-1;c++) z+='^FO'+gx[c]+',445^GB0,1161,2^FS\n';
-  z+='^FO289,1026^GB534,0,2^FS\n';
-  var campos=[
-    [{l:'FORNECEDOR',v:esc(d.forn)},   {l:'RESPONSÁVEL',v:esc(d.resp)}],
-    [{l:'LOTE INTERNO',v:esc(d.lint)}, {l:'LOTE FORNEC.',v:esc(d.loteforn)}],
-    [{l:'DATA NF',v:dBR(d.datanf)},    {l:'NOTA FISCAL',v:esc(d.nf)}],
-    [{l:'SITUAÇÃO',v:esc(d.sit)},      {l:'RNC Nº',v:esc(d.rnc)}]
-  ];
-  var yBase=[1016, 1596];
-  for(var col=0; col<4; col++){
-    var cx1=gx[col], cx2=gx[col+1];
-    for(var r=0;r<2;r++){
-      var yb=yBase[r];
-      z+='^FT'+(cx1+40)+','+yb+'^A0B,30,16^FD'+campos[col][r].l+'^FS\n';
-      z+='^FT'+(cx2-14)+','+yb+'^A0B,46,30^FD'+campos[col][r].v+'^FS\n';
-    }
+  // nome do material: 1 linha gigante (como o template) ou 2 linhas se for longo
+  var LMAT=1350, w1=fitW(nome,LMAT,348,18);
+  if(w1>=100 || nome.indexOf(' ')<0 && nome.length<=8){
+    z+=txtB(261,1576,186,w1,nome);
+  } else {
+    var ln=quebraNome(nome), wl=fitW(ln[0].length>=ln[1].length?ln[0]:ln[1],LMAT,348,18);
+    z+=txtB(165,1576,88,wl,ln[0]);
+    z+=txtB(260,1576,88,wl,ln[1]);
   }
+
+  // ===== faixa superior: DATA RECEBIMENTO =====
+  var dv=dBR(d.datarec);
+  z+=txtB(461,420,84,40,'DATA RECEBIMENTO');
+  z+=txtB(675,418,135,105,dv);                       // tamanho do template
+
+  // ===== campos (rótulo na ponta de baixo, valor à frente) =====
+  var V=function(x,y,t,max){ return txtB(x,y,48,fitW(t,max,38,16),t); };
+  // linha 1 — FORNECEDOR
+  z+=txtB(349,1573,44,33,'FORNECEDOR');
+  z+=V(355,1324,esc(d.forn),860);
+  // linha 2 — LOTE FORNECEDOR | LOTE INTERNO
+  z+=txtB(432,1573,44,33,'LOTE')+txtB(486,1573,44,33,'FORNECEDOR');
+  z+=V(471,1324,esc(d.loteforn),430);
+  z+=txtB(432,860,44,33,'LOTE')+txtB(486,860,44,33,'INTERNO');
+  z+=V(471,690,esc(d.lint),225);
+  // linha 3 — NOTA FISCAL | DATA NF
+  z+=txtB(570,1567,44,33,'NOTA FISCAL');
+  z+=V(576,1324,esc(d.nf),430);
+  z+=txtB(570,860,44,33,'DATA NF');
+  z+=V(570,690,dBR(d.datanf),225);
+  // linha 4 — SITUAÇÃO | RNC Nº
+  z+=txtB(670,1555,53,40,'SITUAÇÃO');
+  z+=V(666,1334,esc(d.sit),440);
+  z+=txtB(670,864,53,40,'RNC Nº');
+  z+=V(666,690,esc(d.rnc),225);
+  // linha 5 — RESPONSÁVEL
+  z+=txtB(770,1585,44,33,'RESPONSÁVEL');
+  z+=V(776,1324,esc(d.resp),860);
+
   z+='^PQ1,0,1,Y^XZ\n';
   return z;
 }
 
-/* ===================== prévia = render do próprio ZPL (idêntica à impressão) ===================== */
-function svgEsc(s){ return esc(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function zplToSVG(zpl){
-  var out='';
-  zpl.split('^FS').forEach(function(f){
-    var mFO=f.match(/\^F[OT](\d+),(\d+)/); if(!mFO) return;
-    var x=+mFO[1], y=+mFO[2];
-    var mGB=f.match(/\^GB(\d+),(\d+),(\d+)/);
-    if(mGB){ var w=+mGB[1],h=+mGB[2],t=+mGB[3];
-      if(w>0&&h>0) out+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="none" stroke="#000" stroke-width="'+t+'"/>';
-      else if(h===0) out+='<line x1="'+x+'" y1="'+y+'" x2="'+(x+w)+'" y2="'+y+'" stroke="#000" stroke-width="'+t+'"/>';
-      else out+='<line x1="'+x+'" y1="'+y+'" x2="'+x+'" y2="'+(y+h)+'" stroke="#000" stroke-width="'+t+'"/>';
-      return;
-    }
-    if(f.indexOf('^BQ')>-1){ var mM=f.match(/\^BQ.,\d+,(\d+)/); var s=(mM?+mM[1]:6)*33;
-      out+='<rect x="'+x+'" y="'+y+'" width="'+s+'" height="'+s+'" fill="#000"/>'
-          +'<rect x="'+(x+20)+'" y="'+(y+20)+'" width="'+(s-40)+'" height="'+(s-40)+'" fill="#fff"/>'
-          +'<rect x="'+(x+46)+'" y="'+(y+46)+'" width="'+(s-92)+'" height="'+(s-92)+'" fill="#000"/>';
-      return;
-    }
-    var mFD=f.match(/\^FD([\s\S]*)$/); if(!mFD) return;
-    var mA=f.match(/\^A0B,(\d+),(\d+)/); var hh=mA?+mA[1]:30, ww=mA?+mA[2]:Math.round(hh*0.66);
-    var txt=svgEsc(mFD[1]);
-    var anchor=/\^FB\d+,1,0,R/.test(f) ? ' text-anchor="end"' : '';
-    var fs=Math.round(hh*0.76);
-    var nchars=(mFD[1]||'').length, tl=Math.max(1, Math.round(nchars*ww*0.60));
-    out+='<text font-size="'+fs+'" font-family="Arial, Helvetica, sans-serif" textLength="'+tl+'" lengthAdjust="spacingAndGlyphs"'+anchor
-       +' transform="translate('+x+' '+y+') rotate(-90)">'+txt+'</text>';
-  });
-  return '<svg viewBox="0 0 831 1614" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">'
-       +'<rect width="831" height="1614" fill="#fff"/>'+out+'</svg>';
-}
 function desenhar(){
   if(!ehEntrada()) return;
   var d=coletar();
   var zpl=buildZPL(d);
   var zo=document.getElementById('zplOut'); if(zo) zo.value=zpl;
-  document.getElementById('etq').innerHTML=zplToSVG(zpl);
 }
 
 /* ===================== confirmar ===================== */
