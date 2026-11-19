@@ -49,17 +49,17 @@
     <span>Planilha: <span id="pApi" class="pill n">—</span></span>
     <span>Impressora: <span id="pImp" class="pill n">—</span></span>
     <span>Escuridão:</span>
-    <input id="escuridao" style="width:56px;padding:6px" value="15">
+    <input id="escuridao" style="width:56px;padding:6px" value="10" onchange="persistCfg()">
     <span title="Velocidade de impressão em polegadas por segundo. Mais baixa = melhor definição.">Veloc.:</span>
-    <input id="velocidade" style="width:52px;padding:6px" value="4">
-    <span title="Desloca a etiqueta para a direita (dots). 8 dots = 1 mm.">Desloc. X:</span>
-    <input id="offX" style="width:56px;padding:6px" value="0">
+    <input id="velocidade" style="width:52px;padding:6px" value="4" onchange="persistCfg()">
+    <span title="Desloca a etiqueta para os lados (dots). 8 dots = 1 mm. Positivo = direita, negativo = esquerda.">Desloc. X:</span>
+    <input id="offX" type="number" style="width:60px;padding:6px" value="0" onchange="persistCfg()">
     <span title="Desloca a etiqueta para baixo (dots). 8 dots = 1 mm.">Y:</span>
-    <input id="offY" style="width:56px;padding:6px" value="0">
+    <input id="offY" type="number" style="width:60px;padding:6px" value="0" onchange="persistCfg()">
     <button class="sec" onclick="imprimirTeste()">Teste</button>
     <button class="sec" onclick="reconectar()">Reconectar</button>
   </div>
-  <div class="sub" style="margin-top:-8px;margin-bottom:12px">Ajuste de posição: 8 dots = 1 mm. Para <b>descer</b> aumente o Y; para a direita, aumente o X. <b>Velocidade</b> menor (ex.: 2–3 pol/s) melhora a definição. Use o botão <b>Teste</b> (imprime uma moldura) para calibrar.</div>
+  <div class="sub" style="margin-top:-8px;margin-bottom:12px">Ajuste de posição: 8 dots = 1 mm. Para <b>descer</b> aumente o Y; para a <b>direita</b> aumente o X (valor <b>negativo</b> move para a esquerda). <b>Velocidade</b> menor (ex.: 2–3 pol/s) melhora a definição. Use o botão <b>Teste</b> (imprime uma moldura) para calibrar. Os ajustes são salvos automaticamente.</div>
 
   <div class="cartao">
     <h2>Fila de impressão</h2>
@@ -92,6 +92,24 @@
     </div>
     <div style="color:#777;font-size:12px">Reenfileira a etiqueta (status Pendente). Use quando a etiqueta se perdeu ou foi excluída por engano.</div>
     <div id="msgReimp" style="font-size:13px;margin-top:6px"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Cancelar OP (estorno de saldo)</h2>
+    <div class="linha" style="margin-bottom:6px">
+      <div style="flex:1"><input id="opCancel" placeholder="OP a cancelar (ex.: OP-19112026-079)"
+             style="width:100%;padding:11px;font-size:15px;border:1px solid #c7ccd4;border-radius:7px"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();cancelarOP();}"></div>
+      <div style="flex:0 0 auto"><button class="sec" style="background:#c5221f" onclick="cancelarOP()">Cancelar OP</button></div>
+    </div>
+    <div class="linha">
+      <div style="flex:1"><input id="opCancelResp" placeholder="Responsável (seu nome)"
+             style="width:100%;padding:9px;font-size:14px;border:1px solid #c7ccd4;border-radius:7px"></div>
+      <div style="flex:1"><input id="opCancelMotivo" placeholder="Motivo (qtd errada, operador/máquina…)"
+             style="width:100%;padding:9px;font-size:14px;border:1px solid #c7ccd4;border-radius:7px"></div>
+    </div>
+    <div style="color:#8a5a12;font-size:12px;margin-top:6px">Remove o produto produzido, <b>devolve o material consumido ao funil</b> e marca a OP como Cancelada. Depois é só refazer o apontamento certo.</div>
+    <div id="msgCancel" style="font-size:13px;margin-top:6px"></div>
   </div>
 
   <div class="cartao">
@@ -142,7 +160,7 @@
   var TC_API_PADRAO='https://script.google.com/a/dulub.net/macros/s/AKfycbwksL1L7rJ_YetodPQaswNarvOATNbDuSg5un3Q-qUvIiE9NnPpB-WPCyGKuLFpsOAF/exec';
   function apiUrl(){ return ((ls('tc_api')||'').trim() || TC_API_PADRAO); }
   function bpUrl(){ return (ls('tc_bp')||'http://127.0.0.1:9100').trim(); }
-  function darkness(){ return Math.max(0, Math.min(30, Number(val('escuridao'))||15)); }
+  function darkness(){ var v = val('escuridao'); return Math.max(0, Math.min(30, (v===''?10:Number(v)))); }
   function sleep(ms){ return new Promise(function(r){setTimeout(r,ms);}); }
   function setStatus(t,c){ var el=document.getElementById('status'); el.textContent=t; el.className='status '+c; }
   function pill(id,txt,c){ var el=document.getElementById(id); el.textContent=txt; el.className='pill '+c; }
@@ -150,7 +168,7 @@
   window.onload = function(){
     document.getElementById('apiUrl').value = apiUrl();
     document.getElementById('bpUrl').value = bpUrl();
-    document.getElementById('escuridao').value = ls('tc_md')||'15';
+    document.getElementById('escuridao').value = ls('tc_md')||'10';
     document.getElementById('velocidade').value = ls('tc_sp')||'4';
     document.getElementById('offX').value = ls('tc_ox')||'0';
     document.getElementById('offY').value = ls('tc_oy')||'0';
@@ -161,8 +179,19 @@
   };
   function salvarConfig(){ ls('tc_api', val('apiUrl')); ls('tc_bp', val('bpUrl')); reconectar(); }
   function reconectar(){ ls('tc_md', val('escuridao')); ls('tc_sp', val('velocidade')); ls('tc_ox', val('offX')); ls('tc_oy', val('offY')); detectarImpressora(); carregarFila(); carregarHistorico(); }
-  function offX(){ return Math.max(0, Math.min(2000, Math.round(Number(val('offX'))||0))); }
+  function offX(){ return Math.max(-2000, Math.min(2000, Math.round(Number(val('offX'))||0))); }
   function offY(){ return Math.max(0, Math.min(2000, Math.round(Number(val('offY'))||0))); }
+  // Salva os ajustes da estação imediatamente (ao mudar qualquer campo).
+  function persistCfg(){ ls('tc_md', val('escuridao')); ls('tc_sp', val('velocidade')); ls('tc_ox', val('offX')); ls('tc_oy', val('offY')); }
+  // Aplica o deslocamento horizontal somando offX a cada ^FO/^FT (o ^LH sozinho
+  // não movia o X de forma confiável nesta etiqueta). Aceita X negativo (esquerda).
+  function deslocarX(zpl, dx){
+    if(!dx) return zpl;
+    return zpl.replace(/\^F([OT])(-?\d+),(-?\d+)/g, function(m, cmd, x, y){
+      var nx = Math.max(0, parseInt(x,10) + dx);
+      return '^F'+cmd+nx+','+y;
+    });
+  }
   function vel(){ return Math.max(1, Math.min(14, Math.round(Number(val('velocidade'))||4))); }
 
   /* ===== IMPRESSÃO AUTOMÁTICA ===== */
@@ -302,6 +331,29 @@
     }catch(e){ msg.innerHTML='<span style="color:#c5221f">Erro: '+e+'</span>'; }
   }
 
+  /* ===== Cancelar OP (estorno) ===== */
+  async function cancelarOP(){
+    var op=(val('opCancel')||'').trim();
+    var resp=(val('opCancelResp')||'').trim();
+    var motivo=(val('opCancelMotivo')||'').trim();
+    var msg=document.getElementById('msgCancel');
+    if(!op){ msg.innerHTML='<span style="color:#c5221f">Digite a OP a cancelar.</span>'; return; }
+    if(!apiUrl()){ msg.innerHTML='<span style="color:#c5221f">Configure a URL da API.</span>'; return; }
+    if(!confirm('Cancelar a OP '+op+'?\n\nIsso ESTORNA o saldo: remove o produto produzido e devolve o material consumido ao funil. Não dá para desfazer.')) return;
+    msg.innerHTML='Cancelando '+op+'…';
+    try{
+      var r=await getAPI('?acao=cancelar_op&op='+encodeURIComponent(op)+'&resp='+encodeURIComponent(resp)+'&motivo='+encodeURIComponent(motivo));
+      if(r && r.ok){
+        msg.innerHTML='<span style="color:#137333">'+(r.mensagem||'OP cancelada ✔')+'</span>';
+        document.getElementById('opCancel').value='';
+        document.getElementById('opCancelMotivo').value='';
+        await carregarFila();
+      }else{
+        msg.innerHTML='<span style="color:#c5221f">'+((r&&r.erro)||'Falha ao cancelar.')+'</span>';
+      }
+    }catch(e){ msg.innerHTML='<span style="color:#c5221f">Erro: '+e+'</span>'; }
+  }
+
   /* ===== Histórico / Reimpressão ===== */
   async function carregarHistorico(){
     if(!apiUrl()){ return; }
@@ -357,7 +409,7 @@
   }
 
   /* ===== Templates ZPL (95x50 @ 8dpmm) ===== */
-  function cab(md){ return "^XA^CI28^MMT^PW760^LL400^MNY^PR"+vel()+"^LH"+offX()+","+offY()+"^MD"+md; }
+  function cab(md){ return "^XA^CI28^MMT^PW760^LL400^MNY^PR"+vel()+"^LH0,"+offY()+"^MD"+md; }
   function zplTeste(md){
     var z = cab(md);
     z += "^FO4,4^GB752,392,3^FS";                                  // moldura externa (vê corte)
@@ -368,10 +420,10 @@
     z += "^FO300,240^BQN,2,6^FDMA,TESTE^FS";     // QR dentro da área útil (não corta)
     z += "^FO30,360^A0N,20,20^FDBorda = limite da etiqueta^FS";
     z += "^XZ";
-    return z;
+    return deslocarX(z, offX());
   }
   async function imprimirTeste(){
-    ls('tc_ox', val('offX')); ls('tc_oy', val('offY')); ls('tc_sp', val('velocidade'));
+    persistCfg();
     if(!(await garantirImpressora())){ setStatus('Impressora não encontrada. Abra o Browser Print e Reconectar.','erro'); return; }
     setStatus('Imprimindo etiqueta de teste (X='+offX()+', Y='+offY()+', Vel='+vel()+')…','info');
     try{ await enviarZPL(zplTeste(darkness())); setStatus('Teste enviado. Ajuste X/Y e repita até enquadrar.','ok'); }
@@ -452,12 +504,13 @@
   async function garantirImpressora(){ if(!impressora){ await detectarImpressora(); } return !!impressora; }
 
   function zplDoItem(it){
-    var md=darkness();
-    if(it.tipo==='PACOTE')   return zplPacote(it.label, md);
-    if(it.tipo==='MISTURA')  return zplMistura(it.label, md);
-    if(it.tipo==='PREFORMA') return zplIntermediario(it.label, md, 'PREFORMA');
-    if(it.tipo==='TAMPA')    return zplIntermediario(it.label, md, 'TAMPA SEM SELO');
-    return zplPallet(it.label, md);
+    var md=darkness(), z;
+    if(it.tipo==='PACOTE')        z = zplPacote(it.label, md);
+    else if(it.tipo==='MISTURA')  z = zplMistura(it.label, md);
+    else if(it.tipo==='PREFORMA') z = zplIntermediario(it.label, md, 'PREFORMA');
+    else if(it.tipo==='TAMPA')    z = zplIntermediario(it.label, md, 'TAMPA SEM SELO');
+    else                          z = zplPallet(it.label, md);
+    return deslocarX(z, offX());
   }
   function tituloItem(it){
     var l=it.label; return it.tipo==='PACOTE' ? l.idPacote : l.id;
