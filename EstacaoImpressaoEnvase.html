@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/11-b · tambor 2 mm abaixo</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/11-c · escuridão/velocidade em cada etiqueta</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -124,11 +124,11 @@
         <div class="dica">Maior = mais escuro. Etiqueta borrada ou "manchada": diminua.</div>
       </div>
       <div>
-        <label>Velocidade (2 a 6)</label>
+        <label>Velocidade (2 a 4)</label>
         <div class="passo">
-          <button onclick="passo('ajVel',-1,2,6)">−</button>
-          <input id="ajVel" type="number" min="2" max="6" step="1">
-          <button onclick="passo('ajVel',1,2,6)">+</button>
+          <button onclick="passo('ajVel',-1,2,4)">−</button>
+          <input id="ajVel" type="number" min="2" max="4" step="1">
+          <button onclick="passo('ajVel',1,2,4)">+</button>
         </div>
         <div class="dica">Menor = mais lento e mais escuro. Maior = mais rápido e mais claro.</div>
       </div>
@@ -160,6 +160,7 @@
       <button onclick="ajustarEscuridao()">💾 GRAVAR ESCURIDÃO NA ZEBRA</button>
       <button onclick="salvarPosicao()">💾 SALVAR POSIÇÃO</button>
       <button style="background:#e67e22;" onclick="testePallet()">🧪 TESTE PALLET</button>
+      <button style="background:#e67e22;" onclick="testeTambor()">🧪 TESTE TAMBOR</button>
       <button style="background:#e67e22;" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
       <button style="background:#8e44ad;" onclick="calibrarZebra()">📏 CALIBRAR ETIQUETA</button>
       <button class="cinza" onclick="document.getElementById('boxAjuste').style.display='none'">FECHAR</button>
@@ -359,7 +360,12 @@ function procurarZebra() {
 // Envia já com o ajuste de posição desta estação (botão 🎚 AJUSTAR)
 function enviarZebraAjustado(zpl) {
   var a = lerAjuste();
-  return enviarZebra(deslocarZPL(zpl, a.dx, a.dy));
+  // Escuridão e velocidade vão DENTRO de cada impressão (não só gravadas na Zebra):
+  // se o driver do Windows ou outro programa mudar a configuração, a etiqueta continua usando a desta estação.
+  var vel = Math.max(2, Math.min(4, a.vel));                  // ZD220: velocidade máxima 4 pol/s
+  var cab = '~SD' + (a.esc < 10 ? '0' + a.esc : a.esc) + '\n';
+  var z = deslocarZPL(zpl, a.dx, a.dy).replace(/\^XA/g, '^XA^PR' + vel + ',' + vel + ',' + vel + '^MD0');
+  return enviarZebra(cab + z);
 }
 
 function enviarZebra(zpl) {
@@ -767,11 +773,21 @@ function testePallet() {
     .catch(function (e) { registrarLog('FALHA', 'Teste de posição — ' + e.message); });
 }
 
+// Etiqueta de tambor de exemplo (TOPO), para ajustar escuridão/velocidade sem passar pela fila
+function testeTambor() {
+  var hoje = new Date().toLocaleDateString('pt-BR');
+  enviarZebraAjustado(zplTambor({ produto: 'DULUB TESTE TAMBOR 200L', anp: 'DISPENSADO', codigo: '0000', qr: 'TESTE-TAMBOR-0000',
+    data_fab: hoje, validade: hoje, hora: horaAgora().slice(0, 5), seq: 0, ean13: '7898913974869', pbruto: '185,88', pliq: '172,58',
+    lote: 'DB0000', comp1: 'Teste de impressão', aplic1: 'Teste de impressão', layout: 'TOPO' }, 'TOPO'))
+    .then(function () { var a = lerAjuste(); registrarLog('IMPRESSO', 'Teste tambor — escuridão ' + a.esc + ', velocidade ' + Math.min(4, a.vel)); })
+    .catch(function (e) { registrarLog('FALHA', 'Teste tambor — ' + e.message); });
+}
+
 function ajustarEscuridao() {
   var esc = parseInt(document.getElementById('ajEsc').value, 10);
   var vel = parseInt(document.getElementById('ajVel').value, 10);
   if (isNaN(esc) || esc < 0 || esc > 30) { alert('Escuridão deve ser de 0 a 30.'); return; }
-  if (isNaN(vel) || vel < 2 || vel > 6) { alert('Velocidade deve ser de 2 a 6.'); return; }
+  if (isNaN(vel) || vel < 2 || vel > 4) { alert('Velocidade deve ser de 2 a 4 (máximo da ZD220).'); return; }
   enviarZebra('~SD' + (esc < 10 ? '0' + esc : esc) + '\n^XA\n^MD0\n^PR' + vel + ',' + vel + '\n^JUS\n^XZ\n')
     .then(function () {
       gravarLocal('est_escuridao', String(esc)); gravarLocal('est_velocidade', String(vel));
