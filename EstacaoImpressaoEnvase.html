@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/11 · fila única + calibrar</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/11-b · tambor 2 mm abaixo</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -492,8 +492,10 @@ function zplLateralTambor(d) {
 function zplTambor(d, layoutGeral) {
   var lay = String(d.layout || layoutGeral || 'TOPO').toUpperCase();
   var hora = doisDig(new Date().getHours()) + ':' + doisDig(new Date().getMinutes());
-  return lay === 'LATERAL' ? zplLateralTambor(d) : zplTopoTambor(d, hora);
+  // TOPO: desce 2 mm (16 pontos) — o título estava encostando/cortando na borda de cima do rolo
+  return lay === 'LATERAL' ? zplLateralTambor(d) : deslocarZPL(zplTopoTambor(d, hora), AJUSTE_TOPO_TAMBOR, 0);
 }
+var AJUSTE_TOPO_TAMBOR = -16;   // 8 pontos = 1 mm. Mais negativo = desce mais.
 
 // Ajuste fino de POSIÇÃO desta estação: soma nas coordenadas de todos os ^FO / ^FT.
 //   dx (x) = altura na etiqueta  → + SOBE   / − desce      (8 pontos = 1 mm)
