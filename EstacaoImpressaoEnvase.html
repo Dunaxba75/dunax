@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 18/11 · fila única</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/11 · fila única + calibrar</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -161,6 +161,7 @@
       <button onclick="salvarPosicao()">💾 SALVAR POSIÇÃO</button>
       <button style="background:#e67e22;" onclick="testePallet()">🧪 TESTE PALLET</button>
       <button style="background:#e67e22;" onclick="testeZebra()">🧪 TESTE ZEBRA</button>
+      <button style="background:#8e44ad;" onclick="calibrarZebra()">📏 CALIBRAR ETIQUETA</button>
       <button class="cinza" onclick="document.getElementById('boxAjuste').style.display='none'">FECHAR</button>
     </div>
   </div>
@@ -775,6 +776,15 @@ function ajustarEscuridao() {
       registrarLog('INFO', 'Escuridão ' + esc + ' e velocidade ' + vel + ' gravadas na Zebra' + (zebra ? ' (' + zebra.name + ')' : ''));
     })
     .catch(function (e) { registrarLog('FALHA', 'Ajuste de escuridão — ' + e.message); });
+}
+
+// Calibra o tamanho da etiqueta: papel térmico direto (^MTD), etiqueta com espaço entre uma e outra (^MNY),
+// grava na Zebra (^JUS) e manda a Zebra medir o rolo (~JC). Fazer sempre que trocar o tipo de rolo.
+function calibrarZebra() {
+  if (!confirm('A Zebra vai puxar 2 ou 3 etiquetas em branco para medir o rolo. Continuar?')) return;
+  enviarZebra('^XA^MTD^MNY^JUS^XZ\n~JC\n')
+    .then(function () { registrarLog('INFO', 'Calibração enviada: a Zebra mediu o tamanho da etiqueta (rolo com espaço entre etiquetas)'); })
+    .catch(function (e) { registrarLog('FALHA', 'Calibração — ' + e.message); });
 }
 
 function testeLaser() {
