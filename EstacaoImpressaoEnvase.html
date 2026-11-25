@@ -52,7 +52,7 @@
 <body>
 
 <div class="header">
-  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 23/11-c · escuridão/velocidade em cada etiqueta</span></div>
+  <div class="t">DULUB | ESTAÇÃO DE IMPRESSÃO — ENVASE <span style="font-size:11px;opacity:.6;font-weight:normal;">versão 25/11 · EAN-13 corrigido</span></div>
   <div class="h"><span class="est" id="nomeEstacao">SEM NOME</span><span id="relogio">--:--:--</span></div>
 </div>
 
@@ -405,10 +405,37 @@ function zplPallet(d) {
   ].join('\n') + '\n';
 }
 
+// Código de barras do tambor.
+// ANTES: Code 128 subconjunto C (">;"), que codifica os números de 2 em 2 — com 13 dígitos (número ímpar)
+// a Zebra descartava o último. AGORA: EAN-13 de verdade (^BE): a Zebra recebe os 12 primeiros dígitos
+// e calcula o 13º (dígito verificador), imprimindo os 13 no código e embaixo dele.
+function digitoEan13(doze) {
+  var t = 0;
+  for (var i = 0; i < 12; i++) t += parseInt(doze.charAt(i), 10) * (i % 2 ? 3 : 1);
+  return (10 - t % 10) % 10;
+}
+function zplCodigoEan(ean) {
+  var n = String(ean === undefined || ean === null ? '' : ean).replace(/\D/g, '');
+  if (!n) return '';
+  if (n.length === 13 || n.length === 12) {
+    var doze = n.slice(0, 12);
+    if (n.length === 12) {
+      registrarLog('FALHA', 'EAN do cadastro com 12 dígitos (' + n + '): a Zebra completou o 13º (' + digitoEan13(doze) + '). Confira o EAN correto na aba LISTA.');
+    }
+    if (n.length === 13 && String(digitoEan13(doze)) !== n.charAt(12)) {
+      registrarLog('FALHA', 'EAN ' + n + ' com dígito verificador errado no cadastro (o certo termina em ' + digitoEan13(doze) + '). Corrija na aba LISTA.');
+    }
+    return '^BY3,3,130^FT470,1180^BER,130,Y,N^FD' + doze + '^FS';
+  }
+  // cadastro com quantidade de dígitos fora do padrão EAN: imprime o número inteiro em Code 128 e avisa
+  registrarLog('FALHA', 'EAN do cadastro com ' + n.length + ' dígitos (' + n + '): o EAN-13 tem 13. Corrija na aba LISTA.');
+  return '^BY3,3,130^FT470,1180^BCR,130,Y,N^FD' + n + '^FS';
+}
+
 // Tambor 200L — TOPO da tampa (831 x 1582 pontos = 104 x 198 mm)
 function zplTopoTambor(d, horaAgoraTxt) {
   function v(x) { return zplLimpo(x); }
-  var zplEan = d.ean13 ? '^BY3,3,130^FT470,1180^BCR,,Y,N^FH\\^FD>;' + v(d.ean13) + '^FS' : '';
+  var zplEan = zplCodigoEan(d.ean13);
   var loteCompleto = 'DB' + String(d.lote || '').toUpperCase().replace(/^DB/, '');
   var comp34 = [d.comp3, d.comp4].filter(Boolean).join(' ');
   return [
