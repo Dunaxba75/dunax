@@ -97,7 +97,7 @@
   <div class="cartao">
     <h2>Cancelar OP (estorno de saldo)</h2>
     <div class="linha" style="margin-bottom:6px">
-      <div style="flex:1"><input id="opCancel" placeholder="OP a cancelar (ex.: OP-19112026-079)"
+      <div style="flex:1"><input id="opCancel" placeholder="OP, lote ou código curto (ex.: ZZ6985)"
              style="width:100%;padding:11px;font-size:15px;border:1px solid #c7ccd4;border-radius:7px"
              onkeydown="if(event.key==='Enter'){event.preventDefault();cancelarOP();}"></div>
       <div style="flex:0 0 auto"><button class="sec" style="background:#c5221f" onclick="cancelarOP()">Cancelar OP</button></div>
@@ -337,7 +337,7 @@
     var resp=(val('opCancelResp')||'').trim();
     var motivo=(val('opCancelMotivo')||'').trim();
     var msg=document.getElementById('msgCancel');
-    if(!op){ msg.innerHTML='<span style="color:#c5221f">Digite a OP a cancelar.</span>'; return; }
+    if(!op){ msg.innerHTML='<span style="color:#c5221f">Digite a OP, o lote ou o código curto a cancelar.</span>'; return; }
     if(!apiUrl()){ msg.innerHTML='<span style="color:#c5221f">Configure a URL da API.</span>'; return; }
     if(!confirm('Cancelar a OP '+op+'?\n\nIsso ESTORNA o saldo: remove o produto produzido e devolve o material consumido ao funil. Não dá para desfazer.')) return;
     msg.innerHTML='Cancelando '+op+'…';
